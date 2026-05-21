@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
 
-class BaseParser:
-    """Placeholder parser protocol (implemented in Phase 1.3)."""
+
+@dataclass(slots=True)
+class ParseResult:
+    markdown: str
+    elapsed_seconds: float
+    page_count: int
+
+
+class BaseParser(Protocol):
+    name: str
+
+    async def parse(self, pdf_path: Path) -> ParseResult: ...

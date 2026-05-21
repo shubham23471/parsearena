@@ -88,6 +88,52 @@ class StorageService:
         metadata["status"] = "completed"
         self._write_metadata(job_id, metadata)
 
+    def update_parser_status(
+        self,
+        job_id: str,
+        parser_name: str,
+        *,
+        status: str,
+        elapsed_seconds: float | None = None,
+        error: str | None = None,
+    ) -> dict:
+        metadata = self.get_metadata(job_id)
+        parsers = metadata.get("parsers", {})
+        parsers[parser_name] = {
+            "name": parser_name,
+            "status": status,
+            "elapsed_seconds": elapsed_seconds,
+            "error": error,
+        }
+        metadata["parsers"] = parsers
+
+        if status == "parsing":
+            metadata["status"] = "parsing"
+        elif status == "error":
+            metadata["status"] = "error"
+        elif status == "completed":
+            parser_states = {entry.get("status") for entry in parsers.values()}
+            if parser_states and parser_states == {"completed"}:
+                metadata["status"] = "completed"
+
+        self._write_metadata(job_id, metadata)
+        return metadata
+
+    def get_result(self, job_id: str, parser_name: str) -> dict:
+        metadata = self.get_metadata(job_id)
+        parser_data = metadata.get("parsers", {}).get(parser_name)
+        if parser_data is None:
+            raise FileNotFoundError(f"Result metadata not found for parser '{parser_name}'.")
+
+        markdown_path = self._job_dir(job_id) / f"{parser_name}.md"
+        if not markdown_path.exists():
+            raise FileNotFoundError(f"Result file not found for parser '{parser_name}'.")
+
+        return {
+            "markdown": markdown_path.read_text(encoding="utf-8"),
+            "elapsed_seconds": parser_data.get("elapsed_seconds"),
+        }
+
     def get_metadata(self, job_id: str) -> dict:
         metadata_path = self._metadata_path(job_id)
         if not metadata_path.exists():

@@ -22,7 +22,7 @@
   - [x] Return typed `UploadResponse`
 - [x] Implement `GET /api/v1/jobs/{job_id}` in `api/v1/jobs.py`.
 - [x] Implement `GET /api/v1/jobs/{job_id}/pdf` in `api/v1/jobs.py`.
-- [ ] Run `uv lock` to refresh `uv.lock`.
+- [x] Run `uv lock` to refresh `uv.lock`.
 - [x] Manually verify:
   - [x] `curl -F "file=@sample.pdf" localhost:8000/api/v1/upload`
   - [x] `curl localhost:8000/api/v1/jobs/{job_id}`

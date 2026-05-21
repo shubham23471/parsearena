@@ -35,3 +35,14 @@ class JobStatus(BaseModel):
     job_id: str
     status: Literal["uploaded", "parsing", "completed", "error"]
     parsers: dict[str, ParserStatus] = Field(default_factory=dict)
+
+
+class ParseTriggerResponse(BaseModel):
+    job_id: str
+    parser: str
+    status: Literal["parsing"]
+
+
+class ParseResultResponse(BaseModel):
+    markdown: str
+    elapsed_seconds: float | None = None

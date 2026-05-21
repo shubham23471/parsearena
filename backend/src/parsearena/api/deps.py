@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import Depends
 
 from parsearena.config import Settings, get_settings
+from parsearena.services.parser_service import ParserService
 from parsearena.services.storage import StorageService
 
 
@@ -20,3 +21,7 @@ def _get_storage(data_dir: Path) -> StorageService:
 
 def get_storage(settings: Settings = Depends(get_app_settings)) -> StorageService:
     return _get_storage(settings.data_dir)
+
+
+def get_parser_service(storage: StorageService = Depends(get_storage)) -> ParserService:
+    return ParserService(storage=storage)
