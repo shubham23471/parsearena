@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi",
+  "pymupdf",
   "pydantic-settings",
   "python-multipart",
   "uvicorn[standard]",

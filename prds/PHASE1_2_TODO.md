@@ -1,0 +1,29 @@
+# Phase 1.2 Implementation TODO
+
+- [x] Add `pymupdf` to backend dependencies in `backend/pyproject.toml`.
+- [x] Implement `StorageService` in `backend/src/parsearena/services/storage.py`:
+  - [x] `create_job()`
+  - [x] `save_pdf()`
+  - [x] `get_pdf_path()`
+  - [x] `save_result()`
+  - [x] `get_metadata()`
+- [x] Add job schemas in `backend/src/parsearena/schemas/jobs.py`:
+  - [x] `UploadResponse`
+  - [x] `ParserStatus`
+  - [x] `JobMetadata`
+  - [x] `JobStatus`
+- [x] Wire dependency injection for storage via `api/deps.py`.
+- [x] Implement `POST /api/v1/upload` in `api/v1/upload.py`:
+  - [x] Accept multipart upload with `file`
+  - [x] Validate PDF type
+  - [x] Validate max size from config
+  - [x] Save file and metadata
+  - [x] Extract page count using PyMuPDF
+  - [x] Return typed `UploadResponse`
+- [x] Implement `GET /api/v1/jobs/{job_id}` in `api/v1/jobs.py`.
+- [x] Implement `GET /api/v1/jobs/{job_id}/pdf` in `api/v1/jobs.py`.
+- [ ] Run `uv lock` to refresh `uv.lock`.
+- [x] Manually verify:
+  - [x] `curl -F "file=@sample.pdf" localhost:8000/api/v1/upload`
+  - [x] `curl localhost:8000/api/v1/jobs/{job_id}`
+  - [x] `curl -I localhost:8000/api/v1/jobs/{job_id}/pdf`

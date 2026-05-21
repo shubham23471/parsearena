@@ -1,6 +1,7 @@
 # project 
 # old files 
 old_files/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
