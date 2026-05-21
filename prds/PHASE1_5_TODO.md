@@ -1,0 +1,26 @@
+# Phase 1.5 Implementation TODO
+
+- [x] Add frontend dependency entries required for PDF viewer/upload UX:
+  - [x] `react-pdf`
+  - [x] `lucide-react`
+- [x] Implement `src/components/pdf-upload.tsx`:
+  - [x] Drag-and-drop area with dashed border and upload icon
+  - [x] Click-to-browse fallback (`input[type=file]`)
+  - [x] Client-side PDF validation
+  - [x] Client-side max size validation (50MB)
+  - [x] Upload progress indicator
+  - [x] Calls upload API and returns success payload to parent
+- [x] Implement `src/components/pdf-viewer.tsx`:
+  - [x] `react-pdf` rendering
+  - [x] Vertical all-page rendering
+  - [x] Page count indicator
+  - [x] Loads PDF from backend `/api/v1/jobs/{job_id}/pdf`
+- [x] Update `src/lib/api.ts`:
+  - [x] Add progress-capable upload helper
+  - [x] Keep typed API responses
+- [x] Update `src/app/page.tsx`:
+  - [x] Upload -> viewer flow
+  - [x] State via `useState` (`jobId`, upload status, parse status)
+  - [x] Inline error display (no alerts)
+- [ ] Install frontend deps (`npm install`) and verify manually.
+- [ ] Run `npm run dev` and validate upload + PDF rendering in browser.
