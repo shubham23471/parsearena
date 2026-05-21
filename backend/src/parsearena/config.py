@@ -1,0 +1,32 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    data_dir: Path = Path("./data")
+    cors_origins: list[str] = ["http://localhost:3000"]
+    max_upload_size_mb: int = 50
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, str):
+            items = [origin.strip() for origin in value.split(",")]
+            return [origin for origin in items if origin]
+        return value
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

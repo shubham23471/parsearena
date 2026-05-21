@@ -1,8 +1,6 @@
 ---
-description: ParseArena project conventions — monorepo with FastAPI backend and Next.js frontend
 alwaysApply: true
 ---
-
 # ParseArena — Project Rules
 
 ## General
