@@ -1,0 +1,23 @@
+# Phase 1.6 Implementation TODO
+
+- [x] Add frontend dependencies for markdown rendering:
+  - [x] `react-markdown`
+  - [x] `remark-gfm`
+- [x] Implement parse flow on `src/app/page.tsx`:
+  - [x] Show Parse button after upload
+  - [x] Trigger `api.triggerParse(jobId)`
+  - [x] Poll `api.getJobStatus(jobId)` until parser completes/errors
+  - [x] Fetch markdown using `api.getParseResult(jobId, "pymupdf4llm")`
+  - [x] Manage `jobId`, upload status, parse status via `useState`
+- [x] Implement loading and error states for parse result panel.
+- [x] Implement `src/components/markdown-viewer.tsx` using `react-markdown` + `remark-gfm`.
+- [x] Update page layout to two panels:
+  - [x] Left panel: PDF viewer
+  - [x] Right panel: Markdown result
+  - [x] Both panels scroll independently
+- [x] Keep layout dark-mode friendly and clean.
+- [ ] Install new frontend deps (`npm install`) and run app.
+- [ ] Manual verification:
+  - [ ] Upload -> Parse button -> loading -> rendered markdown
+  - [ ] Parse failure displays inline error message
+  - [ ] 1440x900 layout has no horizontal overflow
