@@ -14,3 +14,19 @@ uv sync
 # works from project root
 uv run uvicorn parsearena.main:app --reload
 ```
+
+
+# Frontend
+
+## Setup
+
+```bash 
+
+cd frontend
+
+npm install
+
+npm run dev
+http://localhost:3000
+
+```

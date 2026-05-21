@@ -227,3 +227,8 @@ __marimo__/
 # ParseArena runtime data
 backend/data/*
 !backend/data/.gitkeep
+
+# Frontend build artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
