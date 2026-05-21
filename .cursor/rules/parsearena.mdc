@@ -1,0 +1,47 @@
+---
+description: ParseArena project conventions — monorepo with FastAPI backend and Next.js frontend
+alwaysApply: true
+---
+
+# ParseArena — Project Rules
+
+## General
+
+- This is a monorepo: `backend/` (Python/FastAPI) and `frontend/` (Next.js/TypeScript)
+- NO tests. Do not write, generate, or suggest test files for either backend or frontend.
+- NO auto-installing packages. If a dependency is missing, output the exact install command (`uv add <pkg>` for backend, `npm install <pkg>` for frontend) and stop. Let the user run it.
+- Refer to `prds/PRD.md` for product context and `prds/PHASE1.md` for current phase scope.
+
+---
+
+## Python / Backend (`backend/`)
+
+- Package manager: `uv` (not pip, not poetry). All deps go in `pyproject.toml`.
+- Source layout: `backend/src/parsearena/` — all application code lives here.
+- Run server: `uv run uvicorn parsearena.main:app --reload` from `backend/`.
+- Python version: 3.12+. Use modern syntax — `type` aliases, `|` union types, f-strings.
+- FastAPI patterns:
+  - Routers in `api/v1/`, mounted under `/api/v1` prefix.
+  - Pydantic models in `schemas/`. Never use raw dicts in API responses.
+  - Business logic in `services/`, not in route handlers.
+  - Use `Depends()` for injecting services and config.
+  - Use `BackgroundTasks` for async work (parsing).
+- Config via `pydantic-settings` reading from env vars (`.env` file).
+- File storage under `backend/data/` (gitignored). One folder per job: `data/{job_id}/`.
+- Async: use `asyncio.to_thread()` or `loop.run_in_executor()` for CPU-bound parser calls.
+- Error handling: raise `HTTPException` with specific status codes. Never return 500 with generic messages.
+
+---
+
+## TypeScript / Frontend (`frontend/`)
+
+- Framework: Next.js 15, App Router, TypeScript strict mode.
+- Styling: Tailwind CSS + shadcn/ui (`new-york` style). Dark mode is default (`class` strategy).
+- State management: React `useState`/`useReducer` for now. No Redux or Zustand unless explicitly requested.
+- API calls: all go through `lib/api.ts` — a typed fetch wrapper. Base URL from `NEXT_PUBLIC_API_URL`.
+- Components go in `src/components/`. shadcn primitives in `src/components/ui/`.
+- Types in `src/types/index.ts` — keep in sync with backend Pydantic schemas.
+- No `any` types. Use `unknown` + type narrowing if the type is uncertain.
+- Prefer server components by default. Use `"use client"` only when state, effects, or browser APIs are needed.
+- Icons: `lucide-react`.
+- PDF rendering: `react-pdf` (pdf.js wrapper). Markdown rendering: `react-markdown` + `remark-gfm`.
