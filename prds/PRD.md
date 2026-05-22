@@ -8,7 +8,7 @@ ParseArena is a local-first, open-source web application that lets users upload 
 
 ### Target User Persona
 
-**The RAG Engineer** — a developer or ML engineer building retrieval-augmented generation pipelines who needs to choose a PDF parser. They've heard of Docling, Marker, MinerU, etc., but don't have time to install, configure, and compare five tools manually. They want to drop in their own PDFs (invoices, research papers, contracts, slide decks) and see which parser wins for *their* data. They're comfortable with Docker and the terminal but want a visual result, not a JSON dump.
+**The RAG Engineer** — a developer or ML engineer building retrieval-augmented generation pipelines who needs to choose a PDF parser. They've heard of Docling, Marker, Unstructured, etc., but don't have time to install, configure, and compare multiple tools manually. They want to drop in their own PDFs (invoices, research papers, contracts, slide decks) and see which parser wins for *their* data. They're comfortable with Docker and the terminal but want a visual result, not a JSON dump.
 
 ### Core User Story
 
@@ -25,20 +25,20 @@ ParseArena is a local-first, open-source web application that lets users upload 
 | F2  | Single Parser Execution      | Run a selected parser against an uploaded PDF and return the Markdown result.                                                                       | P0       | 1     |
 | F3  | Parsed Result Viewer         | Display a parser's Markdown output with rendered preview (headings, tables, lists).                                                                 | P0       | 1     |
 | F4  | PDF Viewer                   | Render the original PDF in-browser using pdf.js for page-by-page viewing.                                                                           | P0       | 1     |
-| F5  | Multi-Parser Execution       | Run all 5 parsers (or a user-selected subset) against a PDF in parallel and collect results.                                                        | P0       | 2     |
+| F5  | Multi-Parser Execution       | Run all 4 parsers (or a user-selected subset) against a PDF in parallel and collect results.                                                        | P0       | 2     |
 | F6  | Parser Selection             | Let the user choose which parsers to run via checkboxes before triggering a parse job.                                                              | P0       | 2     |
-| F7  | API Key Configuration        | Settings panel where users can paste their Mistral API key (stored in local env/config, never persisted to disk in plaintext beyond `.env`).        | P0       | 2     |
+| F7  | API Key Configuration        | Settings panel for future API-based parsers. Not needed in current phase (all parsers are local).                                                   | P2       | Future |
 | F8  | Progress Tracking            | Show real-time status per parser (queued → running → done/error) while a multi-parser job is in progress.                                           | P0       | 2     |
 | F9  | Side-by-Side Comparison View | Hero feature: display original PDF on the left and parser Markdown outputs in switchable/tabbed panels on the right. Support 2-up and 3-up layouts. | P0       | 3     |
 | F10 | Parser Output Diff           | Highlight structural differences between two selected parser outputs (added/missing headings, tables, images).                                      | P1       | 3     |
 | F11 | Speed Metrics                | Record and display wall-clock parse time and time-per-page for each parser.                                                                         | P0       | 4     |
-| F12 | Cost Metrics                 | Calculate and display estimated cost per page for API-based parsers (Mistral OCR). Show $0 for local parsers.                                       | P1       | 4     |
+| F12 | Cost Metrics                 | Calculate and display estimated cost per page for API-based parsers (if added later). Show $0 for local parsers.                                    | P1       | 4     |
 | F13 | Structure Quality Indicators | Surface heuristic quality signals per parser: table count detected, heading hierarchy depth, image placeholder count, character count.              | P1       | 4     |
 | F14 | Metrics Dashboard            | Aggregate metrics across parsers for a single document into a comparative summary table/card view.                                                  | P1       | 4     |
 | F15 | Export Markdown              | Download the selected parser's Markdown output as a `.md` file.                                                                                     | P0       | 5     |
 | F16 | Copy to Clipboard            | One-click copy of any parser's Markdown output.                                                                                                     | P0       | 5     |
 | F17 | Install Snippet              | Show the `pip install` command and minimal Python usage snippet for the winning parser.                                                             | P1       | 5     |
-| F18 | Docker One-Command Setup     | `docker-compose up` brings up backend + frontend + all parser dependencies.                                                                         | P0       | 5     |
+| F18 | Docker One-Command Setup     | `docker compose up` brings up backend + frontend + all parser dependencies.                                                                         | P0       | 5     |
 | F19 | Batch Upload                 | Upload multiple PDFs and run a selected parser set across all of them in one job.                                                                   | P2       | 6     |
 | F20 | Additional Parsers           | Plugin architecture to add new parsers without modifying core code.                                                                                 | P2       | 6     |
 | F21 | Document Type Classification | Auto-detect document type (invoice, academic paper, slide deck, etc.) and recommend the best parser.                                                | P2       | 6     |
@@ -54,7 +54,7 @@ The system has four layers:
 
 - **Frontend (Next.js)** — A single-page app serving the upload UI, PDF viewer (pdf.js), comparison view, and metrics dashboard. Communicates with the backend exclusively via REST API. Runs on port 3000.
 - **Backend (FastAPI)** — Python API server handling file uploads, parser orchestration, result storage, and metrics calculation. Exposes REST endpoints. Runs on port 8000.
-- **Parser Workers** — Each of the 5 parsers is wrapped in a common adapter interface. When a parse job is triggered, the backend spawns async tasks (one per selected parser) that call the adapter, capture the Markdown output, and record timing. All parsers run in the same Python process (no separate microservices) but execute concurrently via `asyncio` with thread/process pool executors for CPU-bound parsers.
+- **Parser Workers** — Each of the 4 parsers is wrapped in a common adapter interface. When a parse job is triggered, the backend spawns async tasks (one per selected parser) that call the adapter, capture the Markdown output, and record timing. All parsers run in the same Python process (no separate microservices) but execute concurrently via `asyncio` with thread/process pool executors for CPU-bound parsers.
 - **Local File Storage** — Uploaded PDFs and generated Markdown outputs are stored on the local filesystem under a configurable `data/` directory. Each upload gets a UUID-based folder. No database is required for V1 — a lightweight JSON metadata file per job tracks status and results.
 
 ### API Contract Summary
@@ -71,7 +71,7 @@ The system has four layers:
 | `GET`  | `/api/jobs/{job_id}/metrics`          | Get timing/cost/quality metrics for all parsers                             |
 | `GET`  | `/api/jobs/{job_id}/pdf`              | Serve the original PDF file for in-browser rendering                        |
 | `GET`  | `/api/parsers`                        | List available parsers and their status (installed, requires API key, etc.) |
-| `PUT`  | `/api/settings`                       | Update settings (API keys, default parser selection)                        |
+| `PUT`  | `/api/settings`                       | Update settings (reserved for future API keys, default parser selection)    |
 | `GET`  | `/api/health`                         | Health check                                                                |
 
 
@@ -114,22 +114,20 @@ The system has four layers:
 
 ### Phase 2 — Multi-Parser Support
 
-**Goal:** Integrate all 5 parsers and run them in parallel against a single PDF.
+**Goal:** Integrate all 4 parsers and run them in parallel against a single PDF.
 
 **Deliverables:**
 
-- Parser adapter implementations for Docling, Marker, MinerU, and Mistral OCR
+- Parser adapter implementations for Docling, Marker, and Unstructured
 - Common parser interface/protocol that all adapters implement
 - Parser selection UI (checkboxes with parser names, descriptions, and install status)
 - Parallel execution via asyncio with thread pool
 - Per-parser progress tracking (queued → running → done → error)
-- Settings panel for Mistral API key entry
 - Error handling per parser (one parser failing doesn't block others)
 
 **Definition of Done:**
 
-- User can select any combination of the 5 parsers, run them, and see all results complete (or error) independently
-- Mistral OCR works when API key is provided and shows a clear error when it's missing
+- User can select any combination of the 4 parsers, run them, and see all results complete (or error) independently
 - All 4 local parsers complete successfully on a standard 5-page PDF
 - Progress indicators update in real-time during parsing
 
@@ -208,9 +206,9 @@ The system has four layers:
 
 **Definition of Done:**
 
-- `docker-compose up` starts the entire app and all parsers work out of the box (except Mistral OCR which requires an API key)
+- `docker compose up` starts the entire app and all parsers work out of the box
 - A new user can clone the repo, run one command, and use the app within 5 minutes
-- Export/copy/snippet features work for all 5 parsers
+- Export/copy/snippet features work for all 4 parsers
 - README includes at least one screenshot of the comparison view
 
 **Dependencies:** Phases 3 and 4 complete
@@ -229,7 +227,7 @@ The system has four layers:
 - Parser plugin system: define a standard interface so community contributors can add parsers via a config file + adapter
 - Document type auto-classification (invoice, research paper, legal, slide deck) with parser recommendation
 - Parse history: list of previous jobs with quick re-open
-- Additional parsers: candidates include Unstructured, LlamaParse, Nougat
+- Additional parsers: candidates include MinerU, Mistral OCR, LlamaParse, Nougat
 
 **Definition of Done:**
 
@@ -265,12 +263,12 @@ The system has four layers:
 
 | #   | Question                                                                                                                                                                                                                  | Impact                                      |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| 1   | **GPU support in Docker** — Should the Docker setup include NVIDIA runtime for GPU-accelerated parsers (Marker, MinerU, Docling), or default to CPU-only with GPU as an opt-in config?                                    | Affects Docker complexity and parser speed. |
-| 2   | **Parser installation strategy** — Install all parsers in one container, or use separate containers per parser to avoid dependency conflicts? Single container is simpler; multi-container avoids Python dependency hell. | Affects Docker architecture and build time. |
+| 1   | **GPU support in Docker** — Should the Docker setup include NVIDIA runtime for GPU-accelerated parsers (Marker, Docling), or default to CPU-only with GPU as an opt-in config?                                             | Affects Docker complexity and parser speed. |
+| 2   | **Parser installation strategy** — Install all parsers in one container, or use separate containers per parser to avoid dependency conflicts? Single container is simpler; multi-container avoids Python dependency hell. Decision: single container works for current 4 parsers (no Pillow conflict without MinerU). | Affects Docker architecture and build time. |
 | 3   | **Synchronized scrolling** — How should PDF page scrolling sync with Markdown output? By page anchors, by heading matching, or not at all?                                                                                | Affects Phase 3 complexity significantly.   |
 | 4   | **Structure quality scoring** — Should the quality heuristics be simple counts (tables found, headings found) or should we implement a ground-truth comparison mode where users can mark a "reference" output?            | Affects Phase 4 scope.                      |
 | 5   | **Naming: "job" vs "session" vs "comparison"** — What do we call a single upload+parse+compare cycle in the UI and API?                                                                                                   | Affects API naming and UX copy.             |
-| 6   | **Mistral OCR pricing model** — Is the cost-per-page estimate hardcoded or fetched from the API? Pricing may change.                                                                                                      | Affects cost metric accuracy.               |
+| 6   | **Cost metrics for API parsers** — Deferred. All current parsers are local ($0 cost). Will revisit when API-based parsers (Mistral OCR, LlamaParse) are added.                                                            | Affects cost metric accuracy.               |
 | 7   | **WebSocket vs polling** — Should progress tracking use WebSocket for real-time updates or HTTP polling? Polling is simpler; WebSocket feels more responsive.                                                             | Affects Phase 2 implementation.             |
 
 
@@ -286,7 +284,7 @@ The system has four layers:
 - **Ground-truth labeling or human evaluation workflows** — No manual scoring or annotation tools
 - **Automated benchmark suites** — No pre-loaded test datasets or standardized scoring against known outputs
 - **Internationalization (i18n)** — English-only UI
-- **Persistent database** — No SQLite/Postgres; JSON file metadata is sufficient for V1
+- **Persistent database** — SQLite added in Phase 2 for concurrent parser tracking. No Postgres needed.
 - **CI/CD pipeline or automated testing** — Testing is manual for initial launch
 - **Plugin marketplace or community registry** — V2 introduces the plugin interface; no registry in V1
 - **Comparison across multiple documents** — V1 compares parsers on a single document at a time

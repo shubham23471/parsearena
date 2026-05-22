@@ -2,7 +2,7 @@
 
 **Parent PRD:** `prds/PRD.md`
 **Depends on:** Phase 1 (complete)
-**Goal:** Integrate all 5 parsers (PyMuPDF4LLM, Docling, Marker, MinerU, Mistral OCR), run them in parallel against a single PDF, track per-parser progress in real time, and let users manage API keys via a settings panel.
+**Goal:** Integrate all 4 parsers (PyMuPDF4LLM, Docling, Marker, Unstructured), run them in parallel against a single PDF, and track per-parser progress in real time.
 
 **Estimated Effort:** 6–8 days across 5 sub-phases
 
@@ -15,13 +15,13 @@ Before planning, here's what exists and what Phase 2 builds on top of:
 | Layer | What exists | What Phase 2 changes |
 |-------|------------|----------------------|
 | **Parser protocol** | `BaseParser` Protocol in `parsers/base.py` with `name: str` + `async parse(pdf_path) → ParseResult` | Extend `ParseResult` with optional metadata. Add parser registry with availability detection. |
-| **Parser adapter** | `PyMuPDF4LLMParser` in `parsers/pymupdf4llm.py` using `asyncio.to_thread()` | Add 4 new adapters following the same pattern. |
+| **Parser adapter** | `PyMuPDF4LLMParser` in `parsers/pymupdf4llm.py` using `asyncio.to_thread()` | Add 3 new adapters following the same pattern. |
 | **Parser service** | `ParserService` in `services/parser_service.py` — single-parser execution with `mark_parsing()` + `parse_job()` | Extend to accept multiple parsers, run in parallel, isolate errors. |
 | **Storage** | `StorageService` in `services/storage.py` — JSON `metadata.json` per job, files on disk | **Migrate metadata to SQLite** for safe concurrent writes. Keep PDF/markdown files on disk. |
-| **Schemas** | `UploadResponse`, `JobMetadata`, `JobStatus`, `ParserStatus`, `ParseTriggerResponse`, `ParseResultResponse` in `schemas/jobs.py` | Add `ParserInfo`, `ParseRequest`, `SettingsResponse`. Update `ParseTriggerResponse` for multi-parser. |
-| **API** | `POST /parse` hardcoded to pymupdf4llm, `GET /status`, `GET /results/{parser}` | Update `/parse` to accept parser list, add `GET /parsers`, `GET /results` (all), `PUT /settings`, `GET /settings`. |
-| **Config** | `Settings` in `config.py` — `DATA_DIR`, `CORS_ORIGINS`, `MAX_UPLOAD_SIZE_MB` | Add `MISTRAL_API_KEY`, `DB_PATH`. |
-| **Frontend** | Upload → single parse → two-panel PDF+Markdown view | Add parser selection checkboxes, per-parser progress bars, tabbed multi-result view, settings panel. |
+| **Schemas** | `UploadResponse`, `JobMetadata`, `JobStatus`, `ParserStatus`, `ParseTriggerResponse`, `ParseResultResponse` in `schemas/jobs.py` | Add `ParserInfo`, `ParseRequest`. Update `ParseTriggerResponse` for multi-parser. |
+| **API** | `POST /parse` hardcoded to pymupdf4llm, `GET /status`, `GET /results/{parser}` | Update `/parse` to accept parser list, add `GET /parsers`, `GET /results` (all). |
+| **Config** | `Settings` in `config.py` — `DATA_DIR`, `CORS_ORIGINS`, `MAX_UPLOAD_SIZE_MB` | Add `DB_PATH`. |
+| **Frontend** | Upload → single parse → two-panel PDF+Markdown view | Add parser selection checkboxes, per-parser progress bars, tabbed multi-result view. |
 
 ---
 
@@ -85,12 +85,11 @@ CREATE TABLE settings (
 | **PyMuPDF4LLM** | `pymupdf4llm` | Local | No | `pymupdf4llm.to_markdown(path)` | None (already installed) |
 | **Docling** | `docling` | Local | No | `DocumentConverter().convert(path).document.export_to_markdown()` | ML models (~2.5 min first-run download) |
 | **Marker** | `marker-pdf` | Local | No | `PdfConverter(artifact_dict=create_model_dict())(path)` | PyTorch, surya OCR models |
-| **MinerU** | `magic-pdf[full]` | Local | No | CLI wrapper: `mineru -p <path> -o <output> -b pipeline` | PyTorch, layout models, OCR models |
-| **Mistral OCR** | `mistralai` | Cloud API | Yes (`MISTRAL_API_KEY`) | `client.ocr.process(model="mistral-ocr-latest", document=...)` | None (API-based) |
+| **Unstructured** | `unstructured[pdf]` | Local | No | `partition_pdf(filename=path)` → elements joined as text | tesseract-ocr, poppler-utils, layout models |
 
 ### Dependency Reality Check
 
-Docling, Marker, and MinerU each pull in PyTorch and large ML model weights. These are **not** auto-installed. The parser registry reports availability by probing imports. If a parser isn't installed, the UI shows the install command and disables the checkbox.
+Docling, Marker, and Unstructured each pull in ML model weights and/or system dependencies. These are **not** auto-installed. The parser registry reports availability by probing imports. If a parser isn't installed, the UI shows the install command and disables the checkbox.
 
 ---
 
@@ -115,8 +114,8 @@ Docling, Marker, and MinerU each pull in PyTorch and large ML model weights. The
   - `get_result()` → SELECT from `parser_results` + read markdown file from disk
   - Keep `save_pdf()`, `get_pdf_path()`, `save_result()` (file operations) — these still touch disk
 - `parsers/registry.py`: Parser registry
-  - `ParserInfo` dataclass: `name`, `display_name`, `description`, `is_local`, `requires_api_key`, `api_key_env_var`, `install_command`, `is_available` (runtime check)
-  - `get_parser_registry() → list[ParserInfo]` — returns metadata for all 5 parsers
+  - `ParserInfo` dataclass: `name`, `display_name`, `description`, `is_local`, `install_command`, `is_available` (runtime check)
+  - `get_parser_registry() → list[ParserInfo]` — returns metadata for all 4 parsers
   - Availability check: try importing the parser's key module, catch `ImportError`
 - `schemas/parsers.py`: `ParserInfoResponse` Pydantic model
 - `api/v1/parsers.py`: `GET /api/v1/parsers` endpoint — returns list of parsers with availability status
@@ -126,7 +125,7 @@ Docling, Marker, and MinerU each pull in PyTorch and large ML model weights. The
 
 **Definition of Done:**
 - All existing functionality works identically but backed by SQLite instead of JSON
-- `GET /api/v1/parsers` returns a list of 5 parsers with `is_available` reflecting actual install status
+- `GET /api/v1/parsers` returns a list of 4 parsers with `is_available` reflecting actual install status
 - Database file is created automatically on first startup
 - Existing upload → parse → results flow still works end-to-end
 
@@ -134,7 +133,7 @@ Docling, Marker, and MinerU each pull in PyTorch and large ML model weights. The
 
 ### Phase 2.2 — Parser Adapter Implementations
 
-**Goal:** Implement the 4 new parser adapters following the established `BaseParser` protocol.
+**Goal:** Implement the 3 new parser adapters following the established `BaseParser` protocol.
 
 **Deliverables:**
 
@@ -164,41 +163,20 @@ Docling, Marker, and MinerU each pull in PyTorch and large ML model weights. The
   - Model dict created once and reused (cache in class instance)
   - Catches `ImportError` if `marker-pdf` not installed
 
-- `parsers/mineru_parser.py`: MinerU adapter
-  - **Strategy: CLI wrapper via subprocess** — MinerU's Python API changes frequently between versions and has complex initialization. The CLI is the stable interface.
-  ```python
-  # Runs: mineru -p <pdf_path> -o <output_dir> -b pipeline
-  # Then reads the generated .md file from output_dir
-  ```
-  - Uses `asyncio.create_subprocess_exec()` for async subprocess
-  - Parses output directory for the generated markdown file
-  - Falls back to `pipeline` backend (CPU) if no GPU detected
-  - Catches `FileNotFoundError` if `mineru` CLI not on PATH
-
-- `parsers/mistral_ocr_parser.py`: Mistral OCR adapter
+- `parsers/unstructured_parser.py`: Unstructured adapter
   ```python
   # Core API:
-  from mistralai import Mistral
-  client = Mistral(api_key=api_key)
-  # Upload local PDF first
-  uploaded = client.files.upload(
-      file={"file_name": filename, "content": open(pdf_path, "rb")},
-      purpose="ocr"
-  )
-  signed_url = client.files.get_signed_url(file_id=uploaded.id)
-  response = client.ocr.process(
-      model="mistral-ocr-latest",
-      document={"type": "document_url", "document_url": signed_url.url}
-  )
-  markdown = "\n\n".join(page.markdown for page in response.pages)
+  from unstructured.partition.pdf import partition_pdf
+  elements = partition_pdf(filename=str(pdf_path))
+  markdown = "\n\n".join(str(el) for el in elements)
   ```
-  - I/O-bound (network), runs natively async if SDK supports it, else `asyncio.to_thread()`
-  - Requires `MISTRAL_API_KEY` — raises descriptive error if missing
-  - Catches `ImportError` if `mistralai` not installed
+  - CPU-bound, runs via `asyncio.to_thread()`
+  - Requires system deps: `tesseract-ocr`, `poppler-utils`
+  - Catches `ImportError` if `unstructured` not installed
 
 - Update `parsers/__init__.py`: export all parsers
 - Update `ParseResult` in `parsers/base.py`:
-  - Add optional `metadata: dict[str, Any] | None = None` field for parser-specific extra info (e.g., Mistral page count, Marker image count)
+  - Add optional `metadata: dict[str, Any] | None = None` field for parser-specific extra info (e.g., Marker image count, element counts)
 
 **Dependency install commands** (documented, NOT auto-installed):
 ```bash
@@ -208,11 +186,9 @@ uv add docling
 # Marker
 uv add marker-pdf
 
-# MinerU
-uv add "magic-pdf[full]"
-
-# Mistral OCR
-uv add mistralai
+# Unstructured (PDF support)
+uv add "unstructured[pdf]"
+# Also requires system packages: tesseract-ocr, poppler-utils
 ```
 
 **Definition of Done:**
@@ -236,7 +212,7 @@ uv add mistralai
   - Update `ParserStatus`: add `queued_at`, `started_at`, `completed_at` fields
 
 - `services/parser_service.py` rewrite:
-  - `ParserService.__init__()` — registers all 5 parsers (only instantiates available ones)
+  - `ParserService.__init__()` — registers all 4 parsers (only instantiates available ones)
   - `get_available_parsers() → list[str]` — returns names of installed parsers
   - `validate_parser_selection(parsers: list[str])` — checks all requested parsers are available
   - `start_multi_parse(job_id: str, parser_names: list[str])` — marks all as "queued", returns immediately
@@ -271,70 +247,20 @@ uv add mistralai
 - `POST /parse` with `{"parsers": ["pymupdf4llm", "docling"]}` triggers both in parallel
 - Polling `GET /status` shows each parser's progress independently
 - If Docling fails but PyMuPDF4LLM succeeds, the job still shows results for PyMuPDF4LLM
-- 5 parsers running in parallel on a 5-page PDF complete without deadlocks or race conditions
+- 4 parsers running in parallel on a 5-page PDF complete without deadlocks or race conditions
 - `GET /results` returns all completed parser outputs in one call
 
 ---
 
-### Phase 2.4 — Settings & API Key Management
+### Phase 2.4 — Reserved for Future API-Based Parsers
 
-**Goal:** Let users configure API keys via a settings panel. Settings persist across restarts.
-
-**Deliverables:**
-
-- `services/settings_service.py`: Settings CRUD backed by SQLite `settings` table
-  - `get_setting(key: str) → str | None`
-  - `set_setting(key: str, value: str)`
-  - `get_all_settings() → dict[str, str]`
-  - `delete_setting(key: str)`
-
-- Settings key conventions:
-  - `mistral_api_key` — Mistral OCR API key
-  - Future-proofed for other API keys (e.g., LlamaParse if added later)
-
-- `schemas/settings.py`:
-  - `SettingsUpdateRequest(BaseModel)`: `mistral_api_key: str | None`
-  - `SettingsResponse(BaseModel)`: `mistral_api_key: str | None` — **masked** (show last 4 chars only, e.g., `"sk-...a1b2"`)
-  - `mistral_api_key_set: bool` — whether a key is configured
-
-- `api/v1/settings.py`:
-  - `PUT /api/v1/settings` — update settings (API keys)
-  - `GET /api/v1/settings` — get current settings (keys masked)
-
-- Config priority (highest wins):
-  1. Environment variable (`MISTRAL_API_KEY` in `.env`)
-  2. SQLite settings table (set via UI)
-  - If env var is set, it takes precedence and the UI shows "Set via environment variable"
-
-- Update `config.py`:
-  - Add `mistral_api_key: str | None = None`
-  - Add `db_path` computed from `data_dir`
-
-- Update `parsers/mistral_ocr_parser.py`:
-  - Accept API key via constructor injection
-  - `ParserService` injects key from settings on each parse call
-
-- Update `api/v1/parsers.py`:
-  - `GET /api/v1/parsers` now also shows whether API key is configured for API-based parsers
-  - Add `api_key_configured: bool` to `ParserInfoResponse`
-
-- Update `.env.example`:
-  ```
-  MISTRAL_API_KEY=           # Optional: Mistral OCR API key
-  ```
-
-**Definition of Done:**
-- User can set Mistral API key via `PUT /settings` and it persists across server restarts
-- `GET /settings` returns masked key
-- Mistral OCR parser uses the configured key
-- If no key is set, `GET /parsers` shows Mistral OCR as `api_key_configured: false`
-- Environment variable overrides SQLite setting
+**Note:** This sub-phase is reserved for when API-based parsers (e.g., Mistral OCR, LlamaParse) are added. All current parsers (PyMuPDF4LLM, Docling, Marker, Unstructured) are local and require no API keys. The SQLite `settings` table exists in the schema for future use but no settings UI or endpoints are needed in this phase.
 
 ---
 
-### Phase 2.5 — Frontend: Parser Selection, Progress & Settings
+### Phase 2.5 — Frontend: Parser Selection & Progress
 
-**Goal:** Build the frontend for parser selection, real-time progress tracking, multi-result viewing, and settings management.
+**Goal:** Build the frontend for parser selection, real-time progress tracking, and multi-result viewing.
 
 **Deliverables:**
 
@@ -342,7 +268,7 @@ uv add mistralai
   - Fetches `GET /api/v1/parsers` on mount
   - Displays each parser as a checkbox card:
     - Parser name, short description
-    - Availability badge: "Ready" (green) / "Not Installed" (gray, with install command tooltip) / "API Key Required" (yellow)
+    - Availability badge: "Ready" (green) / "Not Installed" (gray, with install command tooltip)
     - Disabled checkbox for unavailable parsers
   - "Select All Available" / "Deselect All" convenience buttons
   - Selected parsers passed to `POST /parse`
@@ -365,16 +291,6 @@ uv add mistralai
   - Errored parsers show error tab with message
   - Existing `MarkdownViewer` component reused
 
-- **Settings Panel** — `components/settings-panel.tsx`:
-  - Accessible via gear icon in the top nav
-  - Opens as a slide-over or modal
-  - Mistral API Key input:
-    - Password field with show/hide toggle
-    - "Save" button calls `PUT /settings`
-    - Shows current status: "Not set" / "Set (sk-...a1b2)" / "Set via environment variable"
-    - "Test Connection" button (optional stretch goal — calls Mistral health)
-  - Future-proofed layout for additional API keys
-
 - **Updated Page Flow** in `page.tsx`:
   1. Upload PDF → show PDF viewer on left
   2. Show parser selector below/beside PDF viewer
@@ -384,23 +300,19 @@ uv add mistralai
   6. User can switch between parser tabs to compare outputs
 
 - **Types** — update `types/index.ts`:
-  - `ParserInfo`: `name`, `display_name`, `description`, `is_local`, `requires_api_key`, `is_available`, `api_key_configured`, `install_command`
+  - `ParserInfo`: `name`, `display_name`, `description`, `is_local`, `is_available`, `install_command`
   - `ParseRequest`: `parsers: string[]`
-  - `Settings`: `mistral_api_key: string | null`, `mistral_api_key_set: boolean`
   - Update `JobStatus` to include new parser status fields
 
 - **API Client** — update `lib/api.ts`:
   - `getParsers()` — `GET /parsers`
   - `triggerParse(jobId, parsers)` — `POST /parse` with body
   - `getAllResults(jobId)` — `GET /results`
-  - `getSettings()` — `GET /settings`
-  - `updateSettings(settings)` — `PUT /settings`
 
 **Definition of Done:**
-- User sees all 5 parsers with availability status before parsing
+- User sees all 4 parsers with availability status before parsing
 - User can select a subset, click "Parse", and watch per-parser progress in real time
 - When parsing completes, user can switch between parser outputs via tabs
-- Settings panel lets user enter/update Mistral API key
 - The UI works at 1440×900 in dark mode without horizontal scrolling
 
 ---
@@ -418,8 +330,6 @@ uv add mistralai
 | `GET` | `/api/v1/jobs/{job_id}/results/{parser}` | — | `ParseResultResponse` | 200 | 1 |
 | **`GET`** | **`/api/v1/jobs/{job_id}/results`** | — | **`AllResultsResponse`** | 200 | **2** |
 | **`GET`** | **`/api/v1/parsers`** | — | **`list[ParserInfoResponse]`** | 200 | **2** |
-| **`GET`** | **`/api/v1/settings`** | — | **`SettingsResponse`** | 200 | **2** |
-| **`PUT`** | **`/api/v1/settings`** | **`SettingsUpdateRequest`** | **`SettingsResponse`** | 200 | **2** |
 
 ---
 
@@ -427,7 +337,7 @@ uv add mistralai
 
 ### ParseRequest
 ```
-parsers: list[str]       # e.g., ["pymupdf4llm", "docling", "marker"]
+parsers: list[str]       # e.g., ["pymupdf4llm", "docling", "marker", "unstructured"]
                          # empty or omitted = all available parsers
 ```
 
@@ -436,10 +346,8 @@ parsers: list[str]       # e.g., ["pymupdf4llm", "docling", "marker"]
 name: str                # "docling"
 display_name: str        # "Docling"
 description: str         # "IBM's document AI parser with advanced table & layout detection"
-is_local: bool           # true
-requires_api_key: bool   # false
+is_local: bool           # true (all current parsers are local)
 is_available: bool       # true (dependency installed)
-api_key_configured: bool # true (only relevant if requires_api_key)
 install_command: str     # "uv add docling"
 ```
 
@@ -453,18 +361,6 @@ parsers: dict[str, str]  # {"pymupdf4llm": "queued", "docling": "queued"}
 ```
 job_id: str
 results: dict[str, ParseResultResponse | null]
-```
-
-### SettingsUpdateRequest
-```
-mistral_api_key: str | null
-```
-
-### SettingsResponse
-```
-mistral_api_key_masked: str | null    # "sk-...a1b2" or null
-mistral_api_key_set: bool
-mistral_api_key_source: str | null    # "settings" | "environment" | null
 ```
 
 ---
@@ -492,10 +388,16 @@ completed_at: str | null     # ISO 8601
 | `aiosqlite` | Async SQLite access | Yes (core) | Yes — add to `pyproject.toml` |
 | `docling` | Docling PDF parser | No (optional) | **No** — user installs if wanted |
 | `marker-pdf` | Marker PDF parser | No (optional) | **No** — user installs if wanted |
-| `magic-pdf[full]` | MinerU PDF parser | No (optional) | **No** — user installs if wanted |
-| `mistralai` | Mistral OCR client | No (optional) | **No** — user installs if wanted |
+| `unstructured[pdf]` | Unstructured PDF parser | No (optional) | **No** — user installs if wanted |
 
 Only `aiosqlite` is added to `pyproject.toml`. Parser packages are optional — the registry detects availability at runtime.
+
+### System Dependencies (for Unstructured)
+
+| Package | Purpose | Platform |
+|---------|---------|----------|
+| `tesseract-ocr` | OCR for images/PDFs | `apt install tesseract-ocr` / `brew install tesseract` |
+| `poppler-utils` | PDF rendering | `apt install poppler-utils` / `brew install poppler` |
 
 ### Frontend (Node — managed via `npm`)
 No new frontend dependencies. Phase 1 already includes all needed UI libraries (shadcn/ui, lucide-react, etc.).
@@ -508,38 +410,30 @@ No new frontend dependencies. Phase 1 already includes all needed UI libraries (
 ```
 backend/src/parsearena/
 ├── services/database.py           # SQLite database manager
-├── services/settings_service.py   # Settings CRUD
 ├── parsers/registry.py            # Parser registry & metadata
 ├── parsers/docling_parser.py      # Docling adapter
 ├── parsers/marker_parser.py       # Marker adapter
-├── parsers/mineru_parser.py       # MinerU adapter (CLI wrapper)
-├── parsers/mistral_ocr_parser.py  # Mistral OCR adapter
+├── parsers/unstructured_parser.py # Unstructured adapter
 ├── schemas/parsers.py             # Parser-related schemas
-├── schemas/settings.py            # Settings schemas
-├── api/v1/parsers.py              # GET /parsers endpoint
-└── api/v1/settings.py             # GET/PUT /settings endpoints
+└── api/v1/parsers.py              # GET /parsers endpoint
 
 frontend/src/
 ├── components/parser-selector.tsx  # Parser selection checkboxes
-├── components/parse-progress.tsx   # Per-parser progress tracking
-└── components/settings-panel.tsx   # Settings slide-over/modal
+└── components/parse-progress.tsx   # Per-parser progress tracking
 ```
 
 ### Modified files
 ```
 backend/src/parsearena/
-├── config.py                      # Add db_path, mistral_api_key
+├── config.py                      # Add db_path
 ├── main.py                        # Init SQLite in lifespan
 ├── services/storage.py            # Migrate from JSON to SQLite
 ├── services/parser_service.py     # Multi-parser parallel execution
 ├── schemas/jobs.py                # New/updated schemas
 ├── api/v1/jobs.py                 # Update parse endpoint, add /results
 ├── api/v1/__init__.py             # Mount new routers
-├── api/router.py                  # (if needed)
-├── api/deps.py                    # Add settings service dependency
 ├── parsers/__init__.py            # Export new parsers
-├── parsers/base.py                # Add metadata field to ParseResult
-└── .env.example                   # Add MISTRAL_API_KEY
+└── parsers/base.py                # Add metadata field to ParseResult
 
 frontend/src/
 ├── app/page.tsx                   # Updated page flow
@@ -554,11 +448,10 @@ frontend/src/
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Parser dependency conflicts (PyTorch version clashes between Marker/MinerU/Docling) | Parsers fail to install together | Each parser is optional. Users install only what they need. Phase 5 Docker will isolate environments if needed. |
-| MinerU CLI API changes between versions | Adapter breaks silently | Pin to stable version range. Parse CLI output defensively. Fallback error message with version info. |
-| Mistral OCR rate limits or API changes | Cloud parser unreliable | Timeout handling, retry with backoff, clear error messages. |
-| SQLite write contention under 5 concurrent parsers | Slow status updates | WAL mode handles this well. Writes are small (status updates). Benchmark confirms <1ms per write. |
-| Large model downloads on first parser run (Docling, Marker, MinerU) | User thinks app is frozen | Document first-run behavior. Parser status shows "initializing" during model download. Long timeout for first run. |
+| Parser dependency conflicts (PyTorch version clashes between Marker/Docling) | Parsers fail to install together | Each parser is optional. Users install only what they need. Phase 5 Docker will isolate environments if needed. |
+| Unstructured requires system packages (tesseract, poppler) | Parser unavailable without system deps | Clear error message with install instructions per platform. Docker image includes all system deps. |
+| SQLite write contention under 4 concurrent parsers | Slow status updates | WAL mode handles this well. Writes are small (status updates). Benchmark confirms <1ms per write. |
+| Large model downloads on first parser run (Docling, Marker) | User thinks app is frozen | Document first-run behavior. Parser status shows "initializing" during model download. Long timeout for first run. |
 
 ---
 
@@ -569,5 +462,5 @@ frontend/src/
 | 1 | Per-parser progress tracking storage? | **SQLite** — zero config, handles concurrency, perfect for local open-source tool. See architecture decision above. |
 | 2 | WebSocket vs polling for progress? | **Polling** — simpler, already used in Phase 1, works well with 1.5s interval. SSE is a stretch goal for Phase 3. |
 | 3 | How to handle parsers with heavy deps? | **Optional installs** — only `aiosqlite` is added to core deps. Parser packages are user-installed. Registry detects availability. |
-| 4 | API key storage security? | **SQLite for settings, .env for overrides.** This is a local tool — the threat model is "keep keys out of git," not "defend against local attackers." |
-| 5 | MinerU Python API vs CLI? | **CLI wrapper** — MinerU's Python API changes frequently. The `mineru` CLI is the stable interface. |
+| 4 | MinerU / Mistral OCR? | **Deferred** — MinerU has a hard Pillow conflict with Marker. Mistral OCR removed (API-based, adds complexity). Both can be revisited via Docker service isolation in Phase 5. |
+| 5 | Unstructured system deps? | **Document clearly** — Unstructured requires `tesseract-ocr` and `poppler-utils`. Docker image includes them. Bare-metal users get clear install instructions. |

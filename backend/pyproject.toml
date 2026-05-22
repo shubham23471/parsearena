@@ -12,6 +12,9 @@ dependencies = [
   "pydantic-settings",
   "python-multipart",
   "uvicorn[standard]",
+  "docling>=2.95.0",
+  "marker-pdf>=1.10.2",
+  "unstructured[pdf]>=0.18.32",
 ]
 
 [build-system]

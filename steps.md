@@ -30,3 +30,21 @@ npm run dev
 http://localhost:3000
 
 ```
+
+# Env dependcy 
+```bash 
+- add Unstructured
+- new env for minueru
+```
+
+
+```bash 
+Tier 1:
+Marker
+Docling
+Unstructured
+LlamaParse
+
+Baseline:
+PyMuPDF
+```
