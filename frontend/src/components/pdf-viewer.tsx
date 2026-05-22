@@ -11,7 +11,8 @@ type PdfViewerProps = {
   jobId: string;
   activePage?: number;
   linkedScrollingEnabled?: boolean;
-  onActivePageChange?: (page: number) => void;
+  scrollSourceId: string;
+  onActivePageChange?: (page: number, sourceId: string) => void;
   onPageCountChange?: (count: number) => void;
 };
 
@@ -19,6 +20,7 @@ export function PdfViewer({
   jobId,
   activePage,
   linkedScrollingEnabled = false,
+  scrollSourceId,
   onActivePageChange,
   onPageCountChange
 }: PdfViewerProps) {
@@ -53,7 +55,7 @@ export function PdfViewer({
         const pageAttr = (topEntry.target as HTMLElement).dataset.pageNumber;
         const pageNumber = Number(pageAttr);
         if (Number.isInteger(pageNumber) && pageNumber > 0) {
-          onActivePageChange(pageNumber);
+          onActivePageChange(pageNumber, scrollSourceId);
         }
       },
       {
@@ -72,7 +74,7 @@ export function PdfViewer({
     return () => {
       observer.disconnect();
     };
-  }, [pageCount, onActivePageChange]);
+  }, [pageCount, onActivePageChange, scrollSourceId]);
 
   useEffect(() => {
     if (!linkedScrollingEnabled || !activePage || pageCount === 0) {

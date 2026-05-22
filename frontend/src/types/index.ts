@@ -36,6 +36,8 @@ export type JobStatus = {
   parsers: Record<string, ParserStatus>;
 };
 
+export type ViewMode = "tab" | "split" | "compare" | "diff";
+
 export type ParseResult = {
   markdown: string;
   elapsed_seconds: number | null;

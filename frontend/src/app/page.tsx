@@ -1,32 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { MarkdownViewer } from "@/components/markdown-viewer";
 import { ParseProgress } from "@/components/parse-progress";
+import { ParserPanel } from "@/components/parser-panel";
 import { ParserSelector } from "@/components/parser-selector";
 import { PdfUpload } from "@/components/pdf-upload";
 import { PdfViewer } from "@/components/pdf-viewer";
+import { ViewModeToggle } from "@/components/view-mode-toggle";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import { getAllResults, triggerParse } from "@/api";
-import type { JobStatus, ParseResult, UploadResponse } from "@/types";
+import type { JobStatus, ParseResult, UploadResponse, ViewMode } from "@/types";
 
 type UploadState = "idle" | "uploading" | "uploaded" | "error";
 type ParseState = "idle" | "parsing" | "completed" | "error";
 
-function getDeviceLabel(device: "cuda" | "mps" | "cpu" | null | undefined): string {
-  if (device === "cuda") {
-    return "GPU-CUDA";
-  }
-  if (device === "mps") {
-    return "GPU-MPS";
-  }
-  if (device === "cpu") {
-    return "CPU";
-  }
-  return "Detecting";
-}
-
 export default function HomePage() {
+  const isLargeViewport = useMediaQuery("(min-width: 1024px)");
+  const isExtraLargeViewport = useMediaQuery("(min-width: 1280px)");
   const [jobId, setJobId] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [parseState, setParseState] = useState<ParseState>("idle");
@@ -38,6 +29,11 @@ export default function HomePage() {
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [linkedScrollingEnabled, setLinkedScrollingEnabled] = useState(true);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("tab");
+  const [secondaryParserTab, setSecondaryParserTab] = useState<string | null>(null);
+  const [jobInfoExpanded, setJobInfoExpanded] = useState(true);
+  const scrollingSourceRef = useRef<string | null>(null);
+  const scrollingSourceTimeoutRef = useRef<number | null>(null);
 
   function handleUploaded(response: UploadResponse): void {
     setJobId(response.job_id);
@@ -47,8 +43,10 @@ export default function HomePage() {
     setJobStatus(null);
     setAllResults({});
     setActiveParserTab(null);
+    setSecondaryParserTab(null);
     setActivePdfPage(1);
     setPdfPageCount(1);
+    setJobInfoExpanded(true);
   }
 
   function getErrorMessage(error: unknown): string {
@@ -118,6 +116,43 @@ export default function HomePage() {
     }
   }, [activeParserTab, allResults]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const savedMode = window.localStorage.getItem("parsearena:view-mode");
+    if (savedMode === "tab" || savedMode === "split" || savedMode === "compare" || savedMode === "diff") {
+      setViewMode(savedMode);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    window.localStorage.setItem("parsearena:view-mode", viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (parseState === "completed") {
+      setJobInfoExpanded(false);
+    }
+  }, [parseState]);
+
+  useEffect(() => {
+    if (!isExtraLargeViewport && viewMode === "split") {
+      setViewMode("tab");
+      return;
+    }
+    if (!isLargeViewport && (viewMode === "tab" || viewMode === "compare" || viewMode === "diff")) {
+      setViewMode("tab");
+      return;
+    }
+    if (viewMode === "diff") {
+      setViewMode("tab");
+    }
+  }, [isExtraLargeViewport, isLargeViewport, viewMode]);
+
   const parserTabs = useMemo(() => {
     if (!jobStatus) {
       return [];
@@ -129,12 +164,82 @@ export default function HomePage() {
     () => Object.values(allResults).some((result) => result !== null),
     [allResults]
   );
-  const activeParserStatus = activeParserTab ? jobStatus?.parsers[activeParserTab] : undefined;
+  const parserStatusMap = jobStatus?.parsers ?? {};
   const activeParserResult = activeParserTab ? allResults[activeParserTab] : null;
+  const secondaryParserResult = secondaryParserTab ? allResults[secondaryParserTab] : null;
+  const parserTabsForSelection = parserTabs.length > 0 ? parserTabs : Object.keys(allResults);
+  const hasSecondaryPanel = viewMode === "split" || viewMode === "compare";
+  const showPdfPanel = viewMode === "tab" || viewMode === "split";
+
+  useEffect(() => {
+    if (parserTabsForSelection.length === 0) {
+      setActiveParserTab(null);
+      return;
+    }
+    if (!activeParserTab || !parserTabsForSelection.includes(activeParserTab)) {
+      setActiveParserTab(parserTabsForSelection[0] ?? null);
+    }
+  }, [activeParserTab, parserTabsForSelection]);
+
+  useEffect(() => {
+    if (!hasSecondaryPanel) {
+      return;
+    }
+    const fallbackParser = parserTabsForSelection.find((parserName) => parserName !== activeParserTab) ?? null;
+    if (!secondaryParserTab || !parserTabsForSelection.includes(secondaryParserTab)) {
+      setSecondaryParserTab(fallbackParser);
+      return;
+    }
+    if (secondaryParserTab === activeParserTab) {
+      setSecondaryParserTab(fallbackParser);
+    }
+  }, [activeParserTab, hasSecondaryPanel, parserTabsForSelection, secondaryParserTab]);
+
+  useEffect(() => {
+    if (activePdfPage <= pdfPageCount) {
+      return;
+    }
+    setActivePdfPage(Math.max(pdfPageCount, 1));
+  }, [activePdfPage, pdfPageCount]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollingSourceTimeoutRef.current !== null) {
+        window.clearTimeout(scrollingSourceTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function handleSyncedPageChange(page: number, sourceId: string): void {
+    if (!linkedScrollingEnabled) {
+      return;
+    }
+    if (scrollingSourceRef.current !== null && scrollingSourceRef.current !== sourceId) {
+      return;
+    }
+    scrollingSourceRef.current = sourceId;
+    setActivePdfPage(page);
+    if (scrollingSourceTimeoutRef.current !== null) {
+      window.clearTimeout(scrollingSourceTimeoutRef.current);
+    }
+    scrollingSourceTimeoutRef.current = window.setTimeout(() => {
+      scrollingSourceRef.current = null;
+    }, 250);
+  }
+
+  const comparisonGridClassName = useMemo(() => {
+    if (viewMode === "split") {
+      return "grid-cols-1 xl:grid-cols-[minmax(0,30fr)_minmax(0,35fr)_minmax(0,35fr)]";
+    }
+    if (viewMode === "compare") {
+      return "grid-cols-1 lg:grid-cols-2";
+    }
+    return "grid-cols-1 lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]";
+  }, [viewMode]);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex max-w-[1280px] flex-col gap-6 px-6 py-10">
+      <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-10 xl:max-w-[1600px] 2xl:max-w-[2400px]">
         <div className="space-y-2">
           <p className="text-sm uppercase tracking-widest text-muted-foreground">Phase 1.6</p>
           <h1 className="text-4xl font-semibold">ParseArena</h1>
@@ -147,14 +252,34 @@ export default function HomePage() {
           <PdfUpload onUploaded={handleUploaded} onUploadStateChange={setUploadState} />
         ) : (
           <section className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-lg border border-border px-4 py-3 md:flex-row md:items-center md:justify-between">
-              <div className="text-sm text-muted-foreground">
-                <p>Uploaded: {uploadedFileName ?? "PDF file"}</p>
-                <p>Job ID: {jobId}</p>
-                <p>Upload status: {uploadState}</p>
-                <p>Parse status: {parseState}</p>
-              </div>
-              {parseError && <p className="text-sm text-red-400">{parseError}</p>}
+            <div className="rounded-lg border border-border px-4 py-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 text-left"
+                onClick={() => {
+                  setJobInfoExpanded((prev) => !prev);
+                }}
+              >
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    <span className="font-medium text-foreground">{uploadedFileName ?? "PDF file"}</span>
+                    {" · "}
+                    <span>Job {jobId}</span>
+                    {" · "}
+                    <span>Upload: {uploadState}</span>
+                    {" · "}
+                    <span>Parse: {parseState}</span>
+                  </p>
+                  {jobInfoExpanded && (
+                    <div className="mt-2 space-y-1 text-xs">
+                      <p>Uploaded file: {uploadedFileName ?? "PDF file"}</p>
+                      <p>Job ID: {jobId}</p>
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs text-muted-foreground">{jobInfoExpanded ? "Collapse" : "Expand"}</span>
+              </button>
+              {parseError && <p className="mt-3 text-sm text-red-400">{parseError}</p>}
             </div>
 
             {parseState === "parsing" ? (
@@ -176,107 +301,123 @@ export default function HomePage() {
               />
             )}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <PdfViewer
-                jobId={jobId}
-                activePage={activePdfPage}
-                linkedScrollingEnabled={linkedScrollingEnabled}
-                onActivePageChange={setActivePdfPage}
-                onPageCountChange={setPdfPageCount}
-              />
+            <section className="space-y-4 rounded-lg border border-border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 text-sm text-muted-foreground">
+                <ViewModeToggle
+                  viewMode={viewMode}
+                  onChange={setViewMode}
+                  isLargeViewport={isLargeViewport}
+                  isExtraLargeViewport={isExtraLargeViewport}
+                />
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={linkedScrollingEnabled}
+                    onChange={(event) => {
+                      setLinkedScrollingEnabled(event.target.checked);
+                    }}
+                    className="h-3.5 w-3.5 accent-foreground"
+                  />
+                  Linked Scrolling
+                </label>
+              </div>
 
-              <section className="rounded-lg border border-border">
-                <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm text-muted-foreground">
-                  <span>Parse Result</span>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={linkedScrollingEnabled}
-                      onChange={(event) => {
-                        setLinkedScrollingEnabled(event.target.checked);
-                      }}
-                      className="h-3.5 w-3.5 accent-foreground"
-                    />
-                    Linked Scrolling
-                  </label>
-                </div>
-                <div className="p-4">
-                  {parseState === "idle" && !hasAnyRenderedResult && (
-                    <p className="text-sm text-muted-foreground">
-                      Select parsers and start parsing to view results.
+              {parseState === "idle" && !hasAnyRenderedResult && (
+                <p className="text-sm text-muted-foreground">
+                  Select parsers and start parsing to view comparison results.
+                </p>
+              )}
+              {parseState === "parsing" && !hasAnyRenderedResult && (
+                <p className="text-sm text-muted-foreground">
+                  Parsing in progress. Live per-parser status is shown above.
+                </p>
+              )}
+              {parseState === "error" && !hasAnyRenderedResult && (
+                <p className="text-sm text-red-400">{parseError ?? "Parse failed."}</p>
+              )}
+
+              {(parseState === "completed" ||
+                hasAnyRenderedResult ||
+                (parseState === "parsing" && activeParserResult)) && (
+                <div className="space-y-3">
+                  {parseState === "parsing" && (
+                    <p className="text-xs text-muted-foreground">
+                      Parsing is in progress. Previously completed parser outputs remain available.
                     </p>
                   )}
-                  {parseState === "parsing" && !hasAnyRenderedResult && (
-                    <p className="text-sm text-muted-foreground">
-                      Parsing in progress. Live per-parser status is shown above.
-                    </p>
-                  )}
-                  {parseState === "error" && !hasAnyRenderedResult && (
-                    <p className="text-sm text-red-400">{parseError ?? "Parse failed."}</p>
-                  )}
-                  {(parseState === "completed" ||
-                    hasAnyRenderedResult ||
-                    (parseState === "parsing" && activeParserResult)) && (
-                    <div className="space-y-3">
-                      {parseState === "parsing" && (
-                        <p className="text-xs text-muted-foreground">
-                          Parsing is in progress. Previously completed parser outputs remain available.
-                        </p>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        {parserTabs.map((parserName) => {
-                          const parserStatus = jobStatus?.parsers[parserName];
-                          const isActive = activeParserTab === parserName;
-                          return (
-                            <button
-                              key={parserName}
-                              type="button"
-                              onClick={() => {
-                                setActiveParserTab(parserName);
-                              }}
-                              className={[
-                                "rounded border px-3 py-1.5 text-xs",
-                                isActive
-                                  ? "border-foreground bg-foreground text-background"
-                                  : "border-border text-muted-foreground"
-                              ].join(" ")}
-                            >
-                              {parserName}
-                              {parserStatus?.elapsed_seconds !== null &&
-                                parserStatus?.elapsed_seconds !== undefined &&
-                                ` · ${parserStatus.elapsed_seconds.toFixed(1)}s`}
-                              {` · ${getDeviceLabel(parserStatus?.execution_device)}`}
-                            </button>
-                          );
-                        })}
-                      </div>
 
-                      {activeParserTab && activeParserStatus?.status === "error" && (
-                        <p className="text-sm text-red-400">
-                          {activeParserStatus.error ?? "Parser failed."}
-                        </p>
-                      )}
-
-                      {activeParserTab && activeParserResult && (
-                        <MarkdownViewer
-                          markdown={activeParserResult.markdown}
-                          activePage={activePdfPage}
-                          totalPages={pdfPageCount}
-                          linkedScrollingEnabled={linkedScrollingEnabled}
-                          onActivePageChange={setActivePdfPage}
-                        />
-                      )}
-
-                      {activeParserTab && !activeParserResult && activeParserStatus?.status !== "error" && (
-                        <p className="text-sm text-muted-foreground">
-                          Result not available for this parser.
-                        </p>
-                      )}
+                  {viewMode === "tab" && parserTabsForSelection.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {parserTabsForSelection.map((parserName) => {
+                        const isActive = activeParserTab === parserName;
+                        return (
+                          <button
+                            key={parserName}
+                            type="button"
+                            onClick={() => {
+                              setActiveParserTab(parserName);
+                            }}
+                            className={[
+                              "rounded border px-3 py-1.5 text-xs",
+                              isActive
+                                ? "border-foreground bg-foreground text-background"
+                                : "border-border text-muted-foreground"
+                            ].join(" ")}
+                          >
+                            {parserName}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
+
+                  <div className={["grid gap-4 transition-all duration-300", comparisonGridClassName].join(" ")}>
+                    {showPdfPanel && (
+                      <PdfViewer
+                        jobId={jobId}
+                        activePage={activePdfPage}
+                        linkedScrollingEnabled={linkedScrollingEnabled}
+                        scrollSourceId="pdf"
+                        onActivePageChange={handleSyncedPageChange}
+                        onPageCountChange={setPdfPageCount}
+                      />
+                    )}
+
+                    <ParserPanel
+                      title={viewMode === "compare" ? "Parser A" : "Parse Result"}
+                      parserNames={parserTabsForSelection}
+                      activeParser={activeParserTab}
+                      onParserChange={setActiveParserTab}
+                      parserStatuses={parserStatusMap}
+                      result={activeParserResult}
+                      activePage={activePdfPage}
+                      totalPages={pdfPageCount}
+                      linkedScrollingEnabled={linkedScrollingEnabled}
+                      onActivePageChange={handleSyncedPageChange}
+                      scrollSourceId="parser-primary"
+                      showParserSelector={viewMode === "compare"}
+                    />
+
+                    {hasSecondaryPanel && (
+                      <ParserPanel
+                        title={viewMode === "compare" ? "Parser B" : "Secondary Parser"}
+                        parserNames={parserTabsForSelection}
+                        activeParser={secondaryParserTab}
+                        onParserChange={setSecondaryParserTab}
+                        parserStatuses={parserStatusMap}
+                        result={secondaryParserResult}
+                        activePage={activePdfPage}
+                        totalPages={pdfPageCount}
+                        linkedScrollingEnabled={linkedScrollingEnabled}
+                        onActivePageChange={handleSyncedPageChange}
+                        scrollSourceId="parser-secondary"
+                        showParserSelector
+                      />
+                    )}
+                  </div>
                 </div>
-              </section>
-            </div>
+              )}
+            </section>
           </section>
         )}
       </div>

@@ -9,7 +9,8 @@ type MarkdownViewerProps = {
   activePage: number;
   totalPages: number;
   linkedScrollingEnabled: boolean;
-  onActivePageChange?: (page: number) => void;
+  scrollSourceId: string;
+  onActivePageChange?: (page: number, sourceId: string) => void;
 };
 
 function splitMarkdownByPage(markdown: string): string[] {
@@ -27,7 +28,8 @@ export function MarkdownViewer({
   activePage,
   totalPages,
   onActivePageChange,
-  linkedScrollingEnabled
+  linkedScrollingEnabled,
+  scrollSourceId
 }: MarkdownViewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sections = useMemo(() => splitMarkdownByPage(markdown), [markdown]);
@@ -96,7 +98,7 @@ export function MarkdownViewer({
       page = Math.min(Math.max(page, 1), Math.max(totalPages, 1));
       if (page !== lastReportedPageRef.current) {
         lastReportedPageRef.current = page;
-        onActivePageChange(page);
+        onActivePageChange(page, scrollSourceId);
       }
     };
 
@@ -104,7 +106,7 @@ export function MarkdownViewer({
     return () => {
       container.removeEventListener("scroll", handleScroll);
     };
-  }, [linkedScrollingEnabled, onActivePageChange, totalPages, usesPageSections]);
+  }, [linkedScrollingEnabled, onActivePageChange, scrollSourceId, totalPages, usesPageSections]);
 
   return (
     <div ref={containerRef} className="max-h-[75vh] space-y-5 overflow-y-auto p-4">
