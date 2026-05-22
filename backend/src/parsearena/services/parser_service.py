@@ -12,16 +12,16 @@ class ParserService:
             "pymupdf4llm": PyMuPDF4LLMParser(),
         }
 
-    def mark_parsing(self, job_id: str, parser_name: str) -> dict:
-        self.storage.get_pdf_path(job_id)
-        parser_state = self.storage.get_metadata(job_id).get("parsers", {}).get(parser_name, {})
+    async def mark_parsing(self, job_id: str, parser_name: str) -> dict:
+        await self.storage.get_pdf_path(job_id)
+        parser_state = (await self.storage.get_metadata(job_id)).get("parsers", {}).get(parser_name, {})
         existing_status = parser_state.get("status")
         if existing_status == "parsing":
             raise ValueError(f"Parser '{parser_name}' is already running for this job.")
         if existing_status == "completed":
             raise ValueError(f"Parser '{parser_name}' has already completed for this job.")
 
-        return self.storage.update_parser_status(
+        return await self.storage.update_parser_status(
             job_id,
             parser_name,
             status="parsing",
@@ -32,11 +32,11 @@ class ParserService:
     async def parse_job(self, job_id: str, parser_name: str) -> None:
         parser = self._get_parser(parser_name)
         try:
-            pdf_path = self.storage.get_pdf_path(job_id)
+            pdf_path = await self.storage.get_pdf_path(job_id)
             parse_result = await parser.parse(pdf_path)
-            self._save_parse_result(job_id, parser_name, parse_result)
+            await self._save_parse_result(job_id, parser_name, parse_result)
         except Exception as exc:
-            self.storage.update_parser_status(
+            await self.storage.update_parser_status(
                 job_id,
                 parser_name,
                 status="error",
@@ -44,8 +44,8 @@ class ParserService:
                 error=str(exc),
             )
 
-    def _save_parse_result(self, job_id: str, parser_name: str, parse_result: ParseResult) -> None:
-        self.storage.save_result(
+    async def _save_parse_result(self, job_id: str, parser_name: str, parse_result: ParseResult) -> None:
+        await self.storage.save_result(
             job_id=job_id,
             parser_name=parser_name,
             markdown=parse_result.markdown,

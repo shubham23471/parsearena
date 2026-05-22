@@ -16,8 +16,8 @@
   - [x] Right panel: Markdown result
   - [x] Both panels scroll independently
 - [x] Keep layout dark-mode friendly and clean.
-- [ ] Install new frontend deps (`npm install`) and run app.
-- [ ] Manual verification:
-  - [ ] Upload -> Parse button -> loading -> rendered markdown
-  - [ ] Parse failure displays inline error message
-  - [ ] 1440x900 layout has no horizontal overflow
+- [x] Install new frontend deps (`npm install`) and run app.
+- [x] Manual verification:
+  - [x] Upload -> Parse button -> loading -> rendered markdown
+  - [x] Parse failure displays inline error message
+  - [x] 1440x900 layout has no horizontal overflow

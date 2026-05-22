@@ -22,5 +22,5 @@
   - [x] Upload -> viewer flow
   - [x] State via `useState` (`jobId`, upload status, parse status)
   - [x] Inline error display (no alerts)
-- [ ] Install frontend deps (`npm install`) and verify manually.
-- [ ] Run `npm run dev` and validate upload + PDF rendering in browser.
+- [x] Install frontend deps (`npm install`) and verify manually.
+- [x] Run `npm run dev` and validate upload + PDF rendering in browser.

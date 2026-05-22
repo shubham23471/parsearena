@@ -3,12 +3,13 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     data_dir: Path = Path("./data")
+    db_path: Path | None = None
     cors_origins: list[str] = ["http://localhost:3000"]
     max_upload_size_mb: int = 50
 
@@ -25,6 +26,12 @@ class Settings(BaseSettings):
             items = [origin.strip() for origin in value.split(",")]
             return [origin for origin in items if origin]
         return value
+
+    @model_validator(mode="after")
+    def set_default_db_path(self) -> Settings:
+        if self.db_path is None:
+            self.db_path = self.data_dir / "parsearena.db"
+        return self
 
 
 @lru_cache(maxsize=1)

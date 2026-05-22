@@ -53,15 +53,15 @@ async def upload_pdf(
             detail=f"File is too large. Max allowed size is {settings.max_upload_size_mb}MB.",
         )
 
-    job_id = storage.create_job()
-    pdf_path = storage.save_pdf(job_id, file_bytes, file.filename)
+    job_id = await storage.create_job()
+    pdf_path = await storage.save_pdf(job_id, file_bytes, file.filename)
     try:
         page_count = _extract_page_count(pdf_path)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     filename = file.filename or "uploaded.pdf"
-    metadata = storage.update_job_metadata(
+    metadata = await storage.update_job_metadata(
         job_id,
         filename=filename,
         page_count=page_count,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from typing import Protocol
 
 
@@ -10,6 +11,7 @@ class ParseResult:
     markdown: str
     elapsed_seconds: float
     page_count: int
+    metadata: dict[str, Any] | None = None
 
 
 class BaseParser(Protocol):

@@ -7,12 +7,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from parsearena.api.router import api_router
 from parsearena.config import get_settings
+from parsearena.services.database import DatabaseService
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
+    database = DatabaseService(settings.db_path)
+    await database.init_db()
     yield
 
 

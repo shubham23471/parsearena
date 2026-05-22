@@ -14,7 +14,7 @@ router = APIRouter(tags=["jobs"])
 @router.get("/jobs/{job_id}", response_model=JobMetadata)
 async def get_job(job_id: str, storage: StorageService = Depends(get_storage)) -> JobMetadata:
     try:
-        metadata = storage.get_metadata(job_id)
+        metadata = await storage.get_metadata(job_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -24,8 +24,8 @@ async def get_job(job_id: str, storage: StorageService = Depends(get_storage)) -
 @router.get("/jobs/{job_id}/pdf")
 async def get_job_pdf(job_id: str, storage: StorageService = Depends(get_storage)) -> FileResponse:
     try:
-        pdf_path = storage.get_pdf_path(job_id)
-        metadata = storage.get_metadata(job_id)
+        pdf_path = await storage.get_pdf_path(job_id)
+        metadata = await storage.get_metadata(job_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -45,7 +45,7 @@ async def parse_job(
 ) -> ParseTriggerResponse:
     parser_name = "pymupdf4llm"
     try:
-        parser_service.mark_parsing(job_id, parser_name)
+        await parser_service.mark_parsing(job_id, parser_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -61,7 +61,7 @@ async def get_job_status(
     storage: StorageService = Depends(get_storage),
 ) -> JobStatus:
     try:
-        metadata = storage.get_metadata(job_id)
+        metadata = await storage.get_metadata(job_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -79,7 +79,7 @@ async def get_parse_result(
     storage: StorageService = Depends(get_storage),
 ) -> ParseResultResponse:
     try:
-        result = storage.get_result(job_id, parser_name)
+        result = await storage.get_result(job_id, parser_name)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

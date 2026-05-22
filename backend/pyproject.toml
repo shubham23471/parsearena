@@ -5,6 +5,7 @@ description = "Backend API for ParseArena"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "aiosqlite",
   "fastapi",
   "pymupdf",
   "pymupdf4llm",
