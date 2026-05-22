@@ -1,31 +1,38 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
 from parsearena.parsers.base import ParseResult
+from parsearena.parsers.device import detect_best_device
 
 
 class MarkerParser:
     name = "marker"
 
     def __init__(self) -> None:
-        self._converter: Any = None
+        self._converters_by_device: dict[str, Any] = {}
         self._converter_lock = threading.Lock()
+
+    def get_execution_device(self) -> str:
+        return detect_best_device()
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
 
-    def _get_converter(self) -> Any:
-        if self._converter is not None:
-            return self._converter
+    def _get_converter(self, execution_device: str) -> Any:
+        converter = self._converters_by_device.get(execution_device)
+        if converter is not None:
+            return converter
 
         with self._converter_lock:
-            if self._converter is not None:
-                return self._converter
+            converter = self._converters_by_device.get(execution_device)
+            if converter is not None:
+                return converter
 
             try:
                 from marker.converters.pdf import PdfConverter
@@ -35,8 +42,27 @@ class MarkerParser:
                     "Missing dependency 'marker-pdf'. Install with: uv add marker-pdf"
                 ) from exc
 
-            self._converter = PdfConverter(artifact_dict=create_model_dict())
-            return self._converter
+            model_kwargs: dict[str, Any] = {}
+            try:
+                model_signature = inspect.signature(create_model_dict)
+                if "device" in model_signature.parameters:
+                    model_kwargs["device"] = execution_device
+            except (TypeError, ValueError):
+                pass
+
+            artifact_dict = create_model_dict(**model_kwargs)
+
+            converter_kwargs: dict[str, Any] = {}
+            try:
+                converter_signature = inspect.signature(PdfConverter)
+                if "device" in converter_signature.parameters:
+                    converter_kwargs["device"] = execution_device
+            except (TypeError, ValueError):
+                pass
+
+            converter = PdfConverter(artifact_dict=artifact_dict, **converter_kwargs)
+            self._converters_by_device[execution_device] = converter
+            return converter
 
     def _parse_sync(self, pdf_path: Path) -> ParseResult:
         try:
@@ -47,7 +73,8 @@ class MarkerParser:
                 "Missing dependency 'marker-pdf'. Install with: uv add marker-pdf"
             ) from exc
 
-        converter = self._get_converter()
+        execution_device = self.get_execution_device()
+        converter = self._get_converter(execution_device)
         started_at = time.perf_counter()
         rendered = converter(str(pdf_path))
         text, _, images = text_from_rendered(rendered)
@@ -56,7 +83,10 @@ class MarkerParser:
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
 
-        metadata = {"image_count": len(images) if images is not None else 0}
+        metadata = {
+            "image_count": len(images) if images is not None else 0,
+            "execution_device": execution_device,
+        }
         return ParseResult(
             markdown=str(text),
             elapsed_seconds=elapsed_seconds,

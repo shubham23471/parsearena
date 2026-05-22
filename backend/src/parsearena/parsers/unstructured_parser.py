@@ -6,10 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from parsearena.parsers.base import ParseResult
+from parsearena.parsers.device import detect_best_device
 
 
 class UnstructuredParser:
     name = "unstructured"
+
+    def get_execution_device(self) -> str:
+        return detect_best_device()
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -24,6 +28,7 @@ class UnstructuredParser:
             ) from exc
 
         started_at = time.perf_counter()
+        execution_device = self.get_execution_device()
         elements: list[Any] = partition_pdf(filename=str(pdf_path))
         lines = [getattr(element, "text", "") for element in elements]
         markdown = "\n\n".join(line.strip() for line in lines if line and line.strip())
@@ -32,7 +37,7 @@ class UnstructuredParser:
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
 
-        metadata = {"element_count": len(elements)}
+        metadata = {"element_count": len(elements), "execution_device": execution_device}
         return ParseResult(
             markdown=markdown,
             elapsed_seconds=elapsed_seconds,

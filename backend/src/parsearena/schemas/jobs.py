@@ -19,6 +19,7 @@ class ParserStatus(BaseModel):
     status: Literal["pending", "queued", "running", "completed", "error"]
     elapsed_seconds: float | None = None
     error: str | None = None
+    execution_device: Literal["cuda", "mps", "cpu"] | None = None
     queued_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None

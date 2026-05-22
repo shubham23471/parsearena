@@ -74,12 +74,14 @@ class ParserService:
         semaphore: asyncio.Semaphore,
     ) -> None:
         parser = self._get_parser(parser_name)
+        execution_device = self._get_execution_device(parser)
         await self.storage.update_parser_status(
             job_id=job_id,
             parser_name=parser_name,
             status="running",
             elapsed_seconds=None,
             error=None,
+            execution_device=execution_device,
         )
         async with semaphore:
             try:
@@ -93,14 +95,17 @@ class ParserService:
                     status="error",
                     elapsed_seconds=None,
                     error=str(exc),
+                    execution_device=execution_device,
                 )
 
     async def _save_parse_result(self, job_id: str, parser_name: str, parse_result: ParseResult) -> None:
+        execution_device = self._extract_execution_device(parse_result)
         await self.storage.save_result(
             job_id=job_id,
             parser_name=parser_name,
             markdown=parse_result.markdown,
             timing=parse_result.elapsed_seconds,
+            execution_device=execution_device,
         )
 
     def _get_parser(self, parser_name: str) -> BaseParser:
@@ -108,3 +113,20 @@ class ParserService:
         if parser is None:
             raise ValueError(f"Unsupported parser '{parser_name}'.")
         return parser
+
+    def _get_execution_device(self, parser: BaseParser) -> str | None:
+        method = getattr(parser, "get_execution_device", None)
+        if callable(method):
+            value = method()
+            if value in {"cuda", "mps", "cpu"}:
+                return value
+        return None
+
+    def _extract_execution_device(self, parse_result: ParseResult) -> str | None:
+        metadata = parse_result.metadata
+        if metadata is None:
+            return None
+        value = metadata.get("execution_device")
+        if value in {"cuda", "mps", "cpu"}:
+            return value
+        return None

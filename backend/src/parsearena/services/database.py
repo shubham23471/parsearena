@@ -46,6 +46,15 @@ MIGRATIONS: list[Migration] = [
             """,
         ),
     ),
+    (
+        2,
+        (
+            """
+            ALTER TABLE parser_results
+            ADD COLUMN execution_device TEXT;
+            """,
+        ),
+    ),
 ]
 
 

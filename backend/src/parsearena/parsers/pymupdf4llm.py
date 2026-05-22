@@ -10,6 +10,9 @@ from parsearena.parsers.base import ParseResult
 class PyMuPDF4LLMParser:
     name = "pymupdf4llm"
 
+    def get_execution_device(self) -> str:
+        return "cpu"
+
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
 
@@ -33,4 +36,5 @@ class PyMuPDF4LLMParser:
             markdown=str(markdown),
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
+            metadata={"execution_device": "cpu"},
         )

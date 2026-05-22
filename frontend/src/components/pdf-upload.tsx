@@ -3,7 +3,7 @@
 import { UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 
-import { uploadPdfWithProgress } from "@/lib/api";
+import { uploadPdfWithProgress } from "@/api";
 import type { UploadResponse } from "@/types";
 
 const MAX_UPLOAD_SIZE_MB = 50;

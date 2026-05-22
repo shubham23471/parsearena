@@ -91,6 +91,7 @@ class StorageService:
         parser_name: str,
         markdown: str,
         timing: float,
+        execution_device: str | None = None,
     ) -> None:
         job_dir = self._job_dir(job_id)
         markdown_path = job_dir / f"{parser_name}.md"
@@ -101,6 +102,7 @@ class StorageService:
             status="completed",
             elapsed_seconds=timing,
             error=None,
+            execution_device=execution_device,
         )
 
     async def update_parser_status(
@@ -111,6 +113,7 @@ class StorageService:
         status: str,
         elapsed_seconds: float | None = None,
         error: str | None = None,
+        execution_device: str | None = None,
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         queued_at = now if status == "queued" else None
@@ -124,14 +127,16 @@ class StorageService:
                 status,
                 elapsed_seconds,
                 error,
+                execution_device,
                 queued_at,
                 started_at,
                 completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, parser_name) DO UPDATE SET
                 status = excluded.status,
                 elapsed_seconds = excluded.elapsed_seconds,
                 error = excluded.error,
+                execution_device = COALESCE(excluded.execution_device, parser_results.execution_device),
                 queued_at = COALESCE(parser_results.queued_at, excluded.queued_at),
                 started_at = COALESCE(parser_results.started_at, excluded.started_at),
                 completed_at = excluded.completed_at
@@ -142,6 +147,7 @@ class StorageService:
                 status,
                 elapsed_seconds,
                 error,
+                execution_device,
                 queued_at,
                 started_at,
                 completed_at,
@@ -217,6 +223,7 @@ class StorageService:
                 status,
                 elapsed_seconds,
                 error,
+                execution_device,
                 queued_at,
                 started_at,
                 completed_at
@@ -232,6 +239,7 @@ class StorageService:
                 "status": row["status"],
                 "elapsed_seconds": row["elapsed_seconds"],
                 "error": row["error"],
+                "execution_device": row["execution_device"],
                 "queued_at": row["queued_at"],
                 "started_at": row["started_at"],
                 "completed_at": row["completed_at"],
