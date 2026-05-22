@@ -16,9 +16,12 @@ class UploadResponse(BaseModel):
 
 class ParserStatus(BaseModel):
     name: str
-    status: Literal["pending", "parsing", "completed", "error"]
+    status: Literal["pending", "queued", "running", "completed", "error"]
     elapsed_seconds: float | None = None
     error: str | None = None
+    queued_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class JobMetadata(BaseModel):
@@ -39,10 +42,18 @@ class JobStatus(BaseModel):
 
 class ParseTriggerResponse(BaseModel):
     job_id: str
-    parser: str
-    status: Literal["parsing"]
+    parsers: dict[str, Literal["queued"]]
+
+
+class ParseRequest(BaseModel):
+    parsers: list[str] = Field(default_factory=list)
 
 
 class ParseResultResponse(BaseModel):
     markdown: str
     elapsed_seconds: float | None = None
+
+
+class AllResultsResponse(BaseModel):
+    job_id: str
+    results: dict[str, ParseResultResponse | None]

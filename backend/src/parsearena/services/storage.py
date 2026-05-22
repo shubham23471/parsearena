@@ -113,7 +113,8 @@ class StorageService:
         error: str | None = None,
     ) -> dict:
         now = datetime.now(UTC).isoformat()
-        started_at = now if status == "parsing" else None
+        queued_at = now if status == "queued" else None
+        started_at = now if status == "running" else None
         completed_at = now if status in {"completed", "error"} else None
         await self.database.execute(
             """
@@ -123,13 +124,15 @@ class StorageService:
                 status,
                 elapsed_seconds,
                 error,
+                queued_at,
                 started_at,
                 completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, parser_name) DO UPDATE SET
                 status = excluded.status,
                 elapsed_seconds = excluded.elapsed_seconds,
                 error = excluded.error,
+                queued_at = COALESCE(parser_results.queued_at, excluded.queued_at),
                 started_at = COALESCE(parser_results.started_at, excluded.started_at),
                 completed_at = excluded.completed_at
             """,
@@ -139,21 +142,22 @@ class StorageService:
                 status,
                 elapsed_seconds,
                 error,
+                queued_at,
                 started_at,
                 completed_at,
             ),
         )
 
         metadata = await self.get_metadata(job_id)
-        parsers = metadata.get("parsers", {})
-        if status == "parsing":
-            metadata["status"] = "parsing"
-        elif status == "error":
-            metadata["status"] = "error"
-        elif status == "completed":
-            parser_states = {entry.get("status") for entry in parsers.values()}
-            if parser_states and parser_states == {"completed"}:
-                metadata["status"] = "completed"
+        parser_states = {
+            str(entry.get("status"))
+            for entry in metadata.get("parsers", {}).values()
+            if entry.get("status") is not None
+        }
+        metadata["status"] = self._derive_job_status(
+            parser_states=parser_states,
+            current_status=str(metadata["status"]),
+        )
 
         await self.database.execute(
             """
@@ -228,6 +232,9 @@ class StorageService:
                 "status": row["status"],
                 "elapsed_seconds": row["elapsed_seconds"],
                 "error": row["error"],
+                "queued_at": row["queued_at"],
+                "started_at": row["started_at"],
+                "completed_at": row["completed_at"],
             }
             for row in parser_rows
         }
@@ -243,6 +250,21 @@ class StorageService:
             "parsers": parsers,
         }
 
+    async def get_all_results(self, job_id: str) -> dict[str, dict | None]:
+        metadata = await self.get_metadata(job_id)
+        results: dict[str, dict | None] = {}
+
+        for parser_name, parser_data in metadata.get("parsers", {}).items():
+            if parser_data.get("status") != "completed":
+                results[parser_name] = None
+                continue
+            try:
+                results[parser_name] = await self.get_result(job_id, parser_name)
+            except FileNotFoundError:
+                results[parser_name] = None
+
+        return results
+
     def _job_dir(self, job_id: str) -> Path:
         job_dir = self.data_dir / job_id
         if not job_dir.exists():
@@ -257,3 +279,14 @@ class StorageService:
         if not normalized.lower().endswith(".pdf"):
             normalized = f"{normalized}.pdf"
         return normalized
+
+    def _derive_job_status(self, *, parser_states: set[str], current_status: str) -> str:
+        if not parser_states:
+            return current_status
+        if any(state in {"queued", "running"} for state in parser_states):
+            return "parsing"
+        if parser_states == {"error"}:
+            return "error"
+        if parser_states.issubset({"completed", "error"}):
+            return "completed"
+        return current_status

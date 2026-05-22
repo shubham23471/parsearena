@@ -4,7 +4,14 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
 from parsearena.api.deps import get_parser_service, get_storage
-from parsearena.schemas.jobs import JobMetadata, JobStatus, ParseResultResponse, ParseTriggerResponse
+from parsearena.schemas.jobs import (
+    AllResultsResponse,
+    JobMetadata,
+    JobStatus,
+    ParseRequest,
+    ParseResultResponse,
+    ParseTriggerResponse,
+)
 from parsearena.services.parser_service import ParserService
 from parsearena.services.storage import StorageService
 
@@ -41,18 +48,21 @@ async def get_job_pdf(job_id: str, storage: StorageService = Depends(get_storage
 async def parse_job(
     job_id: str,
     background_tasks: BackgroundTasks,
+    parse_request: ParseRequest | None = None,
     parser_service: ParserService = Depends(get_parser_service),
 ) -> ParseTriggerResponse:
-    parser_name = "pymupdf4llm"
     try:
-        await parser_service.mark_parsing(job_id, parser_name)
+        selected_parsers = parser_service.validate_parser_selection(
+            parse_request.parsers if parse_request else [],
+        )
+        parser_statuses = await parser_service.start_multi_parse(job_id, selected_parsers)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    background_tasks.add_task(parser_service.parse_job, job_id, parser_name)
-    return ParseTriggerResponse(job_id=job_id, parser=parser_name, status="parsing")
+    background_tasks.add_task(parser_service.run_parsers, job_id, selected_parsers)
+    return ParseTriggerResponse(job_id=job_id, parsers=parser_statuses)
 
 
 @router.get("/jobs/{job_id}/status", response_model=JobStatus)
@@ -84,3 +94,16 @@ async def get_parse_result(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return ParseResultResponse.model_validate(result)
+
+
+@router.get("/jobs/{job_id}/results", response_model=AllResultsResponse)
+async def get_all_parse_results(
+    job_id: str,
+    storage: StorageService = Depends(get_storage),
+) -> AllResultsResponse:
+    try:
+        results = await storage.get_all_results(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return AllResultsResponse(job_id=job_id, results=results)
