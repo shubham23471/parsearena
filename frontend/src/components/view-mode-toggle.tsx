@@ -52,8 +52,8 @@ export function ViewModeToggle({
       mode: "diff",
       label: "Diff",
       icon: GitCompareArrows,
-      enabled: false,
-      disabledReason: "Available in Phase 3.3"
+      enabled: isLargeViewport,
+      disabledReason: "Requires wider screen"
     }
   ];
 

@@ -38,6 +38,41 @@ export type JobStatus = {
 
 export type ViewMode = "tab" | "split" | "compare" | "diff";
 
+export type DiffBlockType = "heading" | "paragraph" | "table" | "list" | "code" | "page_break" | "other";
+
+export type DiffStatus = "matched" | "added" | "removed" | "changed";
+
+export type InlineDiff = {
+  text: string;
+  status: "equal" | "added" | "removed";
+};
+
+export type DiffBlock = {
+  type: DiffBlockType;
+  status: DiffStatus;
+  contentA: string | null;
+  contentB: string | null;
+  inlineDiff?: InlineDiff[];
+};
+
+export type DiffSummary = {
+  matched: number;
+  added: number;
+  removed: number;
+  changed: number;
+  headingsA: number;
+  headingsB: number;
+  tablesA: number;
+  tablesB: number;
+  paragraphsA: number;
+  paragraphsB: number;
+};
+
+export type DiffResult = {
+  blocks: DiffBlock[];
+  summary: DiffSummary;
+};
+
 export type ParseResult = {
   markdown: string;
   elapsed_seconds: number | null;

@@ -62,10 +62,13 @@ export function ParseProgress({ jobId, onStatusUpdate, onFinished }: ParseProgre
         setStatus(latest);
         onStatusUpdate?.(latest);
 
-        const hasActiveParser = Object.values(latest.parsers).some(
-          (parser) => parser.status === "queued" || parser.status === "running"
+        const parserStates = Object.values(latest.parsers);
+        const hasAnyParserState = parserStates.length > 0;
+        const hasIncompleteParser = parserStates.some(
+          (parser) => parser.status === "pending" || parser.status === "queued" || parser.status === "running"
         );
-        if (!hasActiveParser) {
+        const isTerminalJobState = latest.status === "completed" || latest.status === "error";
+        if (hasAnyParserState && !hasIncompleteParser && isTerminalJobState) {
           if (intervalId !== null) {
             window.clearInterval(intervalId);
           }

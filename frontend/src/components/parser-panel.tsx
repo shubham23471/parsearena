@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
+
 import { MarkdownViewer } from "@/components/markdown-viewer";
-import type { ParseResult, ParserStatus } from "@/types";
+import type { ParseResult, ParserStatus, ViewMode } from "@/types";
 
 type ParserPanelProps = {
   title: string;
@@ -15,7 +17,10 @@ type ParserPanelProps = {
   linkedScrollingEnabled: boolean;
   onActivePageChange: (page: number, sourceId: string) => void;
   scrollSourceId: string;
-  showParserSelector?: boolean;
+  viewMode: ViewMode;
+  otherVisibleParsers?: string[];
+  emptyMessage?: string;
+  emptyIsError?: boolean;
 };
 
 function getDeviceLabel(device: "cuda" | "mps" | "cpu" | null | undefined): string {
@@ -43,10 +48,33 @@ export function ParserPanel({
   linkedScrollingEnabled,
   onActivePageChange,
   scrollSourceId,
-  showParserSelector = false
+  viewMode,
+  otherVisibleParsers = [],
+  emptyMessage,
+  emptyIsError = false
 }: ParserPanelProps) {
+  const [contentVisible, setContentVisible] = useState(true);
   const parserStatus = activeParser ? parserStatuses[activeParser] : undefined;
   const hasParserChoices = parserNames.length > 0;
+  const showTabBar = viewMode === "tab";
+  const showParserSelector = viewMode === "split" || viewMode === "compare";
+
+  const completedParserOptions = useMemo(
+    () => parserNames.filter((parserName) => parserStatuses[parserName]?.status === "completed"),
+    [parserNames, parserStatuses]
+  );
+
+  useEffect(() => {
+    setContentVisible(false);
+    const timeoutId = window.setTimeout(() => {
+      setContentVisible(true);
+    }, 80);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeParser]);
+
+  const dropdownOptions = completedParserOptions.length > 0 ? completedParserOptions : parserNames;
 
   return (
     <section className="rounded-lg border border-border">
@@ -76,39 +104,105 @@ export function ParserPanel({
             }}
             className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
           >
-            {parserNames.map((parserName) => (
-              <option key={parserName} value={parserName}>
-                {parserName}
-              </option>
-            ))}
+            {dropdownOptions.map((parserName) => {
+              const status = parserStatuses[parserName];
+              const isVisibleElsewhere = otherVisibleParsers.includes(parserName) && parserName !== activeParser;
+              const timing =
+                status?.elapsed_seconds !== null && status?.elapsed_seconds !== undefined
+                  ? ` · ${status.elapsed_seconds.toFixed(1)}s`
+                  : "";
+              return (
+                <option key={parserName} value={parserName} disabled={isVisibleElsewhere}>
+                  {`${parserName}${timing}${isVisibleElsewhere ? " · Already visible" : ""}`}
+                </option>
+              );
+            })}
           </select>
         )}
       </div>
 
+      {showTabBar && hasParserChoices && (
+        <div className="overflow-x-auto border-b border-border px-2">
+          <div className="flex min-w-max items-stretch gap-1">
+            {parserNames.map((parserName) => {
+              const status = parserStatuses[parserName];
+              const isActive = activeParser === parserName;
+              const statusDotClassName =
+                status?.status === "completed"
+                  ? "bg-emerald-400"
+                  : status?.status === "error"
+                    ? "bg-red-400"
+                    : "bg-muted-foreground/50";
+              return (
+                <button
+                  key={parserName}
+                  type="button"
+                  onClick={() => {
+                    onParserChange(parserName);
+                  }}
+                  className={[
+                    "inline-flex items-center gap-2 border-b-2 px-3 py-2 text-xs transition-colors",
+                    isActive
+                      ? "border-foreground text-foreground"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  ].join(" ")}
+                >
+                  <span className={["h-2 w-2 rounded-full", statusDotClassName].join(" ")} />
+                  <span className="font-medium">{parserName}</span>
+                  {status?.elapsed_seconds !== null && status?.elapsed_seconds !== undefined && (
+                    <span className="text-[11px]">{status.elapsed_seconds.toFixed(1)}s</span>
+                  )}
+                  <span className="text-[11px]">{getDeviceLabel(status?.execution_device)}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="p-4">
         {!activeParser && (
-          <p className="text-sm text-muted-foreground">
-            {hasParserChoices ? "Select a parser to view output." : "No parser results available yet."}
-          </p>
+          emptyIsError ? (
+            <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3">
+              <p className="text-sm text-red-300">{emptyMessage ?? "Parse failed."}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {emptyMessage ?? (hasParserChoices ? "Select a parser to view output." : "No parser results available yet.")}
+            </p>
+          )
         )}
 
         {activeParser && parserStatus?.status === "error" && (
-          <p className="text-sm text-red-400">{parserStatus.error ?? "Parser failed."}</p>
+          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3">
+            <p className="text-sm text-red-300">{parserStatus.error ?? "Parser failed."}</p>
+          </div>
         )}
 
         {activeParser && result && (
-          <MarkdownViewer
-            markdown={result.markdown}
-            activePage={activePage}
-            totalPages={totalPages}
-            linkedScrollingEnabled={linkedScrollingEnabled}
-            onActivePageChange={onActivePageChange}
-            scrollSourceId={scrollSourceId}
-          />
+          <div className={["transition-opacity duration-200", contentVisible ? "opacity-100" : "opacity-0"].join(" ")}>
+            <div className="relative">
+              <MarkdownViewer
+                markdown={result.markdown}
+                activePage={activePage}
+                totalPages={totalPages}
+                linkedScrollingEnabled={linkedScrollingEnabled}
+                onActivePageChange={onActivePageChange}
+                scrollSourceId={scrollSourceId}
+              />
+              {linkedScrollingEnabled && (
+                <div className="pointer-events-none absolute bottom-3 right-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
+                  Page {activePage} / {Math.max(totalPages, 1)}
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {activeParser && !result && parserStatus?.status !== "error" && (
-          <p className="text-sm text-muted-foreground">Result not available for this parser.</p>
+          <p className="text-sm text-muted-foreground">
+            {emptyMessage ?? "Result not available for this parser."}
+          </p>
         )}
       </div>
     </section>
