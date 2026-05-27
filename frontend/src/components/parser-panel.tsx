@@ -77,8 +77,8 @@ export function ParserPanel({
   const dropdownOptions = completedParserOptions.length > 0 ? completedParserOptions : parserNames;
 
   return (
-    <section className="rounded-lg border border-border">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 text-sm">
+    <section className="relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/20 px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">{title}</span>
           {activeParser && <span className="rounded bg-muted px-2 py-1 text-xs font-medium">{activeParser}</span>}
@@ -160,22 +160,29 @@ export function ParserPanel({
         </div>
       )}
 
-      <div className="p-4">
+      <div className="p-4 flex-grow overflow-auto">
         {!activeParser && (
           emptyIsError ? (
-            <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3">
-              <p className="text-sm text-red-300">{emptyMessage ?? "Parse failed."}</p>
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+              <p className="text-sm font-medium text-red-400">{emptyMessage ?? "Parse failed."}</p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {emptyMessage ?? (hasParserChoices ? "Select a parser to view output." : "No parser results available yet.")}
-            </p>
+            <div className="flex h-64 flex-col items-center justify-center text-center opacity-80">
+              <div className="mb-4 rounded-full bg-muted/40 p-5">
+                <svg className="h-8 w-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {emptyMessage ?? (hasParserChoices ? "Select a parser to view output." : "No parser results available yet.")}
+              </p>
+            </div>
           )
         )}
 
         {activeParser && parserStatus?.status === "error" && (
-          <div className="rounded-md border border-red-500/40 bg-red-500/10 p-3">
-            <p className="text-sm text-red-300">{parserStatus.error ?? "Parser failed."}</p>
+          <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm font-medium text-red-400">{parserStatus.error ?? "Parser failed."}</p>
           </div>
         )}
 

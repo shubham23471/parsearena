@@ -55,7 +55,7 @@ export function PdfUpload({ onUploaded, onUploadStateChange, disabled = false }:
   }
 
   return (
-    <section className="space-y-3">
+    <section className="space-y-6 mx-auto w-full max-w-2xl">
       <button
         type="button"
         disabled={disabled}
@@ -76,15 +76,15 @@ export function PdfUpload({ onUploaded, onUploadStateChange, disabled = false }:
           void handleFile(event.dataTransfer.files[0]);
         }}
         className={[
-          "flex w-full flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-10 text-center transition",
-          isDragging ? "border-foreground bg-muted/30" : "border-border",
-          disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/20"
+          "relative flex w-full flex-col items-center justify-center gap-4 overflow-hidden rounded-2xl border-2 border-dashed p-12 text-center transition-colors",
+          isDragging ? "border-primary bg-primary/10" : "border-border bg-card",
+          disabled ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:bg-muted/40 hover:border-primary/40"
         ].join(" ")}
       >
-        <UploadCloud className="h-8 w-8 text-muted-foreground" />
-        <div className="space-y-1">
-          <p className="text-sm font-medium">Drop PDF here or click to browse</p>
-          <p className="text-xs text-muted-foreground">PDF only, up to {MAX_UPLOAD_SIZE_MB}MB</p>
+        <UploadCloud className={`h-12 w-12 ${isDragging ? "text-primary" : "text-muted-foreground"} transition-colors`} />
+        <div className="space-y-2">
+          <p className="text-lg font-medium text-foreground">Drop PDF here or click to browse</p>
+          <p className="text-sm text-muted-foreground">PDF only, up to {MAX_UPLOAD_SIZE_MB}MB</p>
         </div>
       </button>
 
@@ -100,15 +100,17 @@ export function PdfUpload({ onUploaded, onUploadStateChange, disabled = false }:
       />
 
       {progress > 0 && progress < 100 && (
-        <div className="space-y-2">
-          <div className="h-2 w-full overflow-hidden rounded bg-muted">
-            <div className="h-full bg-foreground transition-all" style={{ width: `${progress}%` }} />
+        <div className="space-y-3">
+          <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-primary transition-all duration-200 ease-out" style={{ width: `${progress}%` }} />
           </div>
-          <p className="text-xs text-muted-foreground">Uploading... {progress}%</p>
+          <p className="text-center text-sm font-medium text-muted-foreground">Uploading... {progress}%</p>
         </div>
       )}
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <p className="text-center text-sm text-red-400">{error}</p>
+      )}
     </section>
   );
 }

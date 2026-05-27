@@ -29,6 +29,8 @@ export function PdfViewer({
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const lastProgrammaticPageRef = useRef<number | null>(null);
+  const suppressObserverUntilRef = useRef<number>(0);
+  const lastReportedPageRef = useRef<number | null>(null);
   const pdfUrl = useMemo(() => `${getApiBaseUrl()}/api/v1/jobs/${jobId}/pdf`, [jobId]);
 
   useEffect(() => {
@@ -55,6 +57,13 @@ export function PdfViewer({
         const pageAttr = (topEntry.target as HTMLElement).dataset.pageNumber;
         const pageNumber = Number(pageAttr);
         if (Number.isInteger(pageNumber) && pageNumber > 0) {
+          if (Date.now() < suppressObserverUntilRef.current) {
+            return;
+          }
+          if (lastReportedPageRef.current === pageNumber) {
+            return;
+          }
+          lastReportedPageRef.current = pageNumber;
           onActivePageChange(pageNumber, scrollSourceId);
         }
       },
@@ -80,16 +89,22 @@ export function PdfViewer({
     if (!linkedScrollingEnabled || !activePage || pageCount === 0) {
       return;
     }
-    if (lastProgrammaticPageRef.current === activePage) {
+    const targetPage = Math.min(Math.max(activePage, 1), pageCount);
+    if (lastProgrammaticPageRef.current === targetPage) {
       return;
     }
-    const targetPage = Math.min(Math.max(activePage, 1), pageCount);
+    // Ignore page updates that originated from this viewer itself.
+    if (lastReportedPageRef.current === targetPage) {
+      lastProgrammaticPageRef.current = targetPage;
+      return;
+    }
     const targetElement = pageRefs.current.get(targetPage);
     if (!targetElement) {
       return;
     }
     lastProgrammaticPageRef.current = targetPage;
-    targetElement.scrollIntoView({ block: "start", behavior: "smooth" });
+    suppressObserverUntilRef.current = Date.now() + 500;
+    targetElement.scrollIntoView({ block: "start", behavior: "auto" });
   }, [activePage, linkedScrollingEnabled, pageCount]);
 
   return (

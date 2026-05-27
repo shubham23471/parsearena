@@ -3,14 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --background: 222.2 84% 4.9%;
+  /* Light mode (Clean, modern look) */
+  --background: 210 40% 98%;
+  --foreground: 230 40% 10%;
+  
+  --primary: 260 90% 60%;
+  --primary-foreground: 210 40% 98%;
+  --primary-rgb: 128, 90, 255;
+  
+  --card: 0 0% 100%;
+  --card-foreground: 230 40% 10%;
+  
+  --border: 220 13% 91%;
+  --ring: 260 90% 60%;
+  
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  
+  --accent: 280 90% 60%;
+  --accent-foreground: 210 40% 98%;
+}
+
+.dark {
+  /* Deep space background */
+  --background: 230 40% 4%; 
   --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
+  
+  --primary: 260 100% 70%;
+  --primary-foreground: 210 40% 98%;
+  --primary-rgb: 155, 120, 255;
+  
+  --card: 230 40% 6%;
   --card-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --ring: 212.7 26.8% 83.9%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
+  
+  --border: 230 20% 15%;
+  --ring: 260 100% 70%;
+  
+  --muted: 230 20% 12%;
+  --muted-foreground: 220 15% 65%;
+  
+  --accent: 280 100% 70%;
+  --accent-foreground: 210 40% 98%;
 }
 
 * {
@@ -19,4 +52,25 @@
 
 body {
   @apply bg-background text-foreground antialiased;
+}
+
+.dark body {
+  /* Premium radial gradient overlay only in dark mode */
+  background-image: radial-gradient(circle at top center, rgba(155, 120, 255, 0.1), transparent 60%);
+  background-attachment: fixed;
+}
+
+/* Custom Webkit Scrollbars for a modern look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
 }

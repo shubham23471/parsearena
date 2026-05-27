@@ -1,34 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ParseProgress } from "@/components/parse-progress";
 import { DiffSummaryCard } from "@/components/diff-summary";
 import { DiffViewer } from "@/components/diff-viewer";
+import { HomeHeader } from "@/components/home/home-header";
+import { JobSummaryCard } from "@/components/home/job-summary-card";
+import { WorkspaceToolbar } from "@/components/home/workspace-toolbar";
 import { ParserPanel } from "@/components/parser-panel";
 import { ParserSelector } from "@/components/parser-selector";
 import { PdfUpload } from "@/components/pdf-upload";
 import { PdfViewer } from "@/components/pdf-viewer";
-import { ViewModeToggle } from "@/components/view-mode-toggle";
+import { useHomeKeyboardShortcuts } from "@/hooks/use-home-keyboard-shortcuts";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useSyncedPdfPage } from "@/hooks/use-synced-pdf-page";
 import { computeStructuralDiff } from "@/lib/diff";
 import { getAllResults, triggerParse } from "@/api";
 import type { JobStatus, ParseResult, UploadResponse, ViewMode } from "@/types";
 
 type UploadState = "idle" | "uploading" | "uploaded" | "error";
 type ParseState = "idle" | "parsing" | "completed" | "error";
-
-function isTypingInInput(): boolean {
-  if (typeof document === "undefined") {
-    return false;
-  }
-  const activeElement = document.activeElement;
-  if (!activeElement) {
-    return false;
-  }
-  const tag = activeElement.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select" || activeElement.hasAttribute("contenteditable");
-}
 
 export default function HomePage() {
   const isLargeViewport = useMediaQuery("(min-width: 1024px)");
@@ -40,7 +32,6 @@ export default function HomePage() {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [allResults, setAllResults] = useState<Record<string, ParseResult | null>>({});
   const [activeParserTab, setActiveParserTab] = useState<string | null>(null);
-  const [activePdfPage, setActivePdfPage] = useState(1);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [linkedScrollingEnabled, setLinkedScrollingEnabled] = useState(true);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
@@ -50,10 +41,10 @@ export default function HomePage() {
   const [diffParserB, setDiffParserB] = useState<string | null>(null);
   const [jobInfoExpanded, setJobInfoExpanded] = useState(true);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const scrollingSourceRef = useRef<string | null>(null);
-  const scrollingSourceTimeoutRef = useRef<number | null>(null);
-  const viewShortcutPendingRef = useRef(false);
-  const viewShortcutTimerRef = useRef<number | null>(null);
+  const { activePdfPage, handleSyncedPageChange, setActivePdfPage } = useSyncedPdfPage({
+    linkedScrollingEnabled,
+    pdfPageCount
+  });
 
   function handleUploaded(response: UploadResponse): void {
     setJobId(response.job_id);
@@ -191,6 +182,13 @@ export default function HomePage() {
     [allResults]
   );
   const parserStatusMap = jobStatus?.parsers ?? {};
+  const completedParsersForCurrentJob = useMemo(
+    () =>
+      Object.entries(parserStatusMap)
+        .filter(([, parser]) => parser.status === "completed")
+        .map(([parserName]) => parserName),
+    [parserStatusMap]
+  );
   const activeParserResult = activeParserTab ? allResults[activeParserTab] : null;
   const secondaryParserResult = secondaryParserTab ? allResults[secondaryParserTab] : null;
   const parserTabsForSelection = parserTabs.length > 0 ? parserTabs : Object.keys(allResults);
@@ -256,127 +254,17 @@ export default function HomePage() {
     }
   }, [completedParserWithResults, diffParserA, diffParserB, viewMode]);
 
-  useEffect(() => {
-    if (activePdfPage <= pdfPageCount) {
-      return;
-    }
-    setActivePdfPage(Math.max(pdfPageCount, 1));
-  }, [activePdfPage, pdfPageCount]);
-
-  useEffect(() => {
-    return () => {
-      if (scrollingSourceTimeoutRef.current !== null) {
-        window.clearTimeout(scrollingSourceTimeoutRef.current);
-      }
-      if (viewShortcutTimerRef.current !== null) {
-        window.clearTimeout(viewShortcutTimerRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    const switchModeFromShortcut = (mode: ViewMode) => {
-      if (mode === "split" && !isExtraLargeViewport) {
-        return;
-      }
-      if (mode === "compare" && !isLargeViewport) {
-        return;
-      }
-      setViewMode(mode);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (isTypingInInput()) {
-        return;
-      }
-      if (event.key === "?") {
-        event.preventDefault();
-        setShortcutHelpOpen((prev) => !prev);
-        return;
-      }
-
-      if (event.key === "l") {
-        event.preventDefault();
-        setLinkedScrollingEnabled((prev) => !prev);
-        return;
-      }
-
-      if (viewShortcutPendingRef.current) {
-        const shortcutMap: Record<string, ViewMode> = {
-          t: "tab",
-          s: "split",
-          c: "compare"
-        };
-        const mode = shortcutMap[event.key.toLowerCase()];
-        viewShortcutPendingRef.current = false;
-        if (viewShortcutTimerRef.current !== null) {
-          window.clearTimeout(viewShortcutTimerRef.current);
-        }
-        if (mode) {
-          event.preventDefault();
-          switchModeFromShortcut(mode);
-        }
-        return;
-      }
-
-      if (event.key.toLowerCase() === "v") {
-        event.preventDefault();
-        viewShortcutPendingRef.current = true;
-        if (viewShortcutTimerRef.current !== null) {
-          window.clearTimeout(viewShortcutTimerRef.current);
-        }
-        viewShortcutTimerRef.current = window.setTimeout(() => {
-          viewShortcutPendingRef.current = false;
-        }, 1200);
-        return;
-      }
-
-      if (viewMode !== "tab" || parserTabsForSelection.length === 0) {
-        return;
-      }
-
-      if (/^[1-9]$/.test(event.key)) {
-        const parserIndex = Number(event.key) - 1;
-        const parserName = parserTabsForSelection[parserIndex];
-        if (parserName) {
-          event.preventDefault();
-          setActiveParserTab(parserName);
-        }
-        return;
-      }
-
-      if (event.key === "[" || event.key === "]") {
-        event.preventDefault();
-        const currentIndex = activeParserTab ? parserTabsForSelection.indexOf(activeParserTab) : 0;
-        const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
-        const direction = event.key === "]" ? 1 : -1;
-        const nextIndex = (safeCurrentIndex + direction + parserTabsForSelection.length) % parserTabsForSelection.length;
-        setActiveParserTab(parserTabsForSelection[nextIndex] ?? null);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [activeParserTab, isExtraLargeViewport, isLargeViewport, parserTabsForSelection, viewMode]);
-
-  function handleSyncedPageChange(page: number, sourceId: string): void {
-    if (!linkedScrollingEnabled) {
-      return;
-    }
-    if (scrollingSourceRef.current !== null && scrollingSourceRef.current !== sourceId) {
-      return;
-    }
-    scrollingSourceRef.current = sourceId;
-    setActivePdfPage(page);
-    if (scrollingSourceTimeoutRef.current !== null) {
-      window.clearTimeout(scrollingSourceTimeoutRef.current);
-    }
-    scrollingSourceTimeoutRef.current = window.setTimeout(() => {
-      scrollingSourceRef.current = null;
-    }, 250);
-  }
+  useHomeKeyboardShortcuts({
+    activeParserTab,
+    isExtraLargeViewport,
+    isLargeViewport,
+    parserTabsForSelection,
+    setActiveParserTab,
+    setLinkedScrollingEnabled,
+    setShortcutHelpOpen,
+    setViewMode,
+    viewMode
+  });
 
   const comparisonGridClassName = useMemo(() => {
     if (viewMode === "split") {
@@ -393,48 +281,24 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-10 xl:max-w-[1600px] 2xl:max-w-[2400px]">
-        <div className="space-y-2">
-          <p className="text-sm uppercase tracking-widest text-muted-foreground">Phase 1.6</p>
-          <h1 className="text-4xl font-semibold">ParseArena</h1>
-          <p className="text-sm text-muted-foreground">
-            Upload a PDF, choose parsers, track progress, and compare markdown output.
-          </p>
-        </div>
+      <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-6 px-6 py-8 xl:max-w-[1600px] 2xl:max-w-[2400px]">
+        <HomeHeader />
 
         {!jobId ? (
           <PdfUpload onUploaded={handleUploaded} onUploadStateChange={setUploadState} />
         ) : (
           <section className="space-y-4">
-            <div className="rounded-lg border border-border px-4 py-3">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 text-left"
-                onClick={() => {
-                  setJobInfoExpanded((prev) => !prev);
-                }}
-              >
-                <div className="text-sm text-muted-foreground">
-                  <p>
-                    <span className="font-medium text-foreground">{uploadedFileName ?? "PDF file"}</span>
-                    {" · "}
-                    <span>Job {jobId}</span>
-                    {" · "}
-                    <span>Upload: {uploadState}</span>
-                    {" · "}
-                    <span>Parse: {parseState}</span>
-                  </p>
-                  {jobInfoExpanded && (
-                    <div className="mt-2 space-y-1 text-xs">
-                      <p>Uploaded file: {uploadedFileName ?? "PDF file"}</p>
-                      <p>Job ID: {jobId}</p>
-                    </div>
-                  )}
-                </div>
-                <span className="text-xs text-muted-foreground">{jobInfoExpanded ? "Collapse" : "Expand"}</span>
-              </button>
-              {parseError && <p className="mt-3 text-sm text-red-400">{parseError}</p>}
-            </div>
+            <JobSummaryCard
+              jobId={jobId}
+              jobInfoExpanded={jobInfoExpanded}
+              onToggleExpanded={() => {
+                setJobInfoExpanded((prev) => !prev);
+              }}
+              parseError={parseError}
+              parseState={parseState}
+              uploadState={uploadState}
+              uploadedFileName={uploadedFileName}
+            />
 
             {parseState === "parsing" ? (
               <ParseProgress
@@ -449,55 +313,26 @@ export default function HomePage() {
             ) : (
               <ParserSelector
                 disabled={false}
+                lockedParserNames={completedParsersForCurrentJob}
                 onSubmitSelection={(selectedParsers) => {
                   void handleTriggerParse(selectedParsers);
                 }}
               />
             )}
 
-            <section className="space-y-4 rounded-lg border border-border p-4">
-              <div className="relative flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4 text-sm text-muted-foreground">
-                <div className="flex flex-wrap items-center gap-2">
-                  <ViewModeToggle
-                    viewMode={viewMode}
-                    onChange={setViewMode}
-                    isLargeViewport={isLargeViewport}
-                    isExtraLargeViewport={isExtraLargeViewport}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShortcutHelpOpen((prev) => !prev);
-                    }}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded border border-border text-xs hover:bg-muted/40"
-                    aria-label="Show keyboard shortcuts"
-                    title="Keyboard shortcuts"
-                  >
-                    ?
-                  </button>
-                </div>
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={linkedScrollingEnabled}
-                    onChange={(event) => {
-                      setLinkedScrollingEnabled(event.target.checked);
-                    }}
-                    className="h-3.5 w-3.5 accent-foreground"
-                  />
-                  Linked Scrolling
-                </label>
-                {shortcutHelpOpen && (
-                  <div className="absolute right-0 top-11 z-10 w-72 rounded-md border border-border bg-background p-3 text-xs text-muted-foreground shadow-lg">
-                    <p className="mb-2 font-medium text-foreground">Keyboard Shortcuts</p>
-                    <p>`1`-`n`: switch parser tab (Tab mode)</p>
-                    <p>`[` / `]`: previous or next parser</p>
-                    <p>`v` then `t` / `s` / `c`: switch view mode</p>
-                    <p>`l`: toggle linked scrolling</p>
-                    <p>`?`: toggle this help</p>
-                  </div>
-                )}
-              </div>
+            <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+              <WorkspaceToolbar
+                isExtraLargeViewport={isExtraLargeViewport}
+                isLargeViewport={isLargeViewport}
+                linkedScrollingEnabled={linkedScrollingEnabled}
+                onToggleShortcutHelp={() => {
+                  setShortcutHelpOpen((prev) => !prev);
+                }}
+                onViewModeChange={setViewMode}
+                setLinkedScrollingEnabled={setLinkedScrollingEnabled}
+                shortcutHelpOpen={shortcutHelpOpen}
+                viewMode={viewMode}
+              />
 
               {viewMode === "diff" ? (
                 <div className="space-y-4">
@@ -575,7 +410,7 @@ export default function HomePage() {
                   )}
                 </div>
               ) : (
-                <div className={["grid gap-4 transition-all duration-300", comparisonGridClassName].join(" ")}>
+                <div className={["grid gap-4", comparisonGridClassName].join(" ")}>
                   {showPdfPanel && (
                     <PdfViewer
                       jobId={jobId}

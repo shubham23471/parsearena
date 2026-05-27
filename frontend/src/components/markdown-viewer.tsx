@@ -46,22 +46,26 @@ export function MarkdownViewer({
       return;
     }
     const targetPage = Math.min(Math.max(activePage, 1), Math.max(totalPages, 1));
+    // Ignore page updates that originated from this viewer itself.
+    if (lastReportedPageRef.current === targetPage) {
+      return;
+    }
     isProgrammaticScrollRef.current = true;
 
     if (usesPageSections) {
       const target = container.querySelector<HTMLElement>(`[data-page-number="${targetPage}"]`);
       if (target) {
-        target.scrollIntoView({ block: "start", behavior: "smooth" });
+        target.scrollIntoView({ block: "start", behavior: "auto" });
       }
     } else {
       const maxScrollTop = Math.max(container.scrollHeight - container.clientHeight, 0);
       const scrollRatio = totalPages > 1 ? (targetPage - 1) / (totalPages - 1) : 0;
-      container.scrollTo({ top: maxScrollTop * scrollRatio, behavior: "smooth" });
+      container.scrollTo({ top: maxScrollTop * scrollRatio, behavior: "auto" });
     }
 
     window.setTimeout(() => {
       isProgrammaticScrollRef.current = false;
-    }, 350);
+    }, 500);
   }, [activePage, linkedScrollingEnabled, sections.length, totalPages, usesPageSections]);
 
   useEffect(() => {
