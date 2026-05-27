@@ -2,103 +2,23 @@
 
 Short reference for the backend API exposed by ParseArena.
 
-## Base URL
-
+**Base URL**
 - Local dev: `http://localhost:8000`
 - API prefix: `/api/v1`
 
-## Endpoint Index
+## Endpoints
 
-- `GET /api/v1/health`
-- `POST /api/v1/upload`
-- `GET /api/v1/parsers`
-- `GET /api/v1/jobs/{job_id}`
-- `GET /api/v1/jobs/{job_id}/pdf`
-- `POST /api/v1/jobs/{job_id}/parse`
-- `GET /api/v1/jobs/{job_id}/status`
-- `GET /api/v1/jobs/{job_id}/results`
-- `GET /api/v1/jobs/{job_id}/results/{parser_name}`
-
-## Health
-
-### `GET /api/v1/health`
-
-- Purpose: service health check
-- Response: `{"status": "ok"}`
-
-## Upload
-
-### `POST /api/v1/upload`
-
-- Content type: `multipart/form-data`
-- Field: `file` (PDF only)
-- Returns: `UploadResponse`
-  - `job_id`, `filename`, `page_count`, `size_bytes`, `created_at`
-- Common errors:
-  - `422` invalid file type
-  - `422` empty file
-  - `422` file too large
-
-## Parsers
-
-### `GET /api/v1/parsers`
-
-- Purpose: list parser registry + runtime availability
-- Returns: `list[ParserInfoResponse]`
-  - `name`, `display_name`, `description`
-  - `is_local`, `is_available`
-  - `install_command`
-
-## Jobs
-
-### `GET /api/v1/jobs/{job_id}`
-
-- Purpose: fetch job metadata
-- Returns: `JobMetadata`
-- Error: `404` if job does not exist
-
-### `GET /api/v1/jobs/{job_id}/pdf`
-
-- Purpose: download original uploaded PDF
-- Returns: PDF file stream
-- Error: `404` if job/PDF does not exist
-
-### `POST /api/v1/jobs/{job_id}/parse`
-
-- Purpose: queue one or more parsers for a job
-- Request body: `ParseRequest`
-  - `parsers: string[]`
-  - Empty or omitted list defaults to all available parsers
-- Returns `202` + `ParseTriggerResponse`
-  - `job_id`
-  - `parsers: { "<parser_name>": "queued" }`
-- Errors:
-  - `404` job not found
-  - `409` invalid parser selection or parser already running
-
-### `GET /api/v1/jobs/{job_id}/status`
-
-- Purpose: poll per-parser progress
-- Returns: `JobStatus`
-  - `status`: `uploaded | parsing | completed | error`
-  - `parsers`: parser map with:
-    - `status`: `pending | queued | running | completed | error`
-    - `elapsed_seconds`, `error`
-    - `queued_at`, `started_at`, `completed_at`
-
-### `GET /api/v1/jobs/{job_id}/results`
-
-- Purpose: fetch all parser results for a job
-- Returns: `AllResultsResponse`
-  - `results` map: parser name -> `ParseResultResponse | null`
-  - Incomplete/errored parsers return `null`
-
-### `GET /api/v1/jobs/{job_id}/results/{parser_name}`
-
-- Purpose: fetch one parser result
-- Returns: `ParseResultResponse`
-  - `markdown`, `elapsed_seconds`
-- Error: `404` if parser result is missing
+| Method | Endpoint | Purpose | Request Body / Fields | Response | Possible Errors |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/health` | Service health check | - | `{"status": "ok"}` | - |
+| `POST` | `/api/v1/upload` | Upload PDF file | `multipart/form-data` with `file` field (PDF only) | `UploadResponse` (`job_id`, `filename`, `page_count`, `size_bytes`, `created_at`) | `422` (invalid file type, empty file, file too large) |
+| `GET` | `/api/v1/parsers` | List parser registry & availability | - | `list[ParserInfoResponse]` (`name`, `display_name`, `description`, `is_local`, `is_available`, `install_command`) | - |
+| `GET` | `/api/v1/jobs/{job_id}` | Fetch job metadata | - | `JobMetadata` | `404` (job does not exist) |
+| `GET` | `/api/v1/jobs/{job_id}/pdf` | Download original uploaded PDF | - | PDF file stream | `404` (job/PDF does not exist) |
+| `POST` | `/api/v1/jobs/{job_id}/parse` | Queue one or more parsers for a job | `ParseRequest` (`parsers: string[]`). Empty defaults to all available. | `202` + `ParseTriggerResponse` (`job_id`, `parsers: { "<parser_name>": "queued" }`) | `404` (job not found), `409` (invalid parser selection / already running) |
+| `GET` | `/api/v1/jobs/{job_id}/status` | Poll per-parser progress | - | `JobStatus` (overall `status`, plus `parsers` map with `status`, `elapsed_seconds`, `error`, timings) | - |
+| `GET` | `/api/v1/jobs/{job_id}/results` | Fetch all parser results for a job | - | `AllResultsResponse` (map of parser name to `ParseResultResponse` or `null`) | - |
+| `GET` | `/api/v1/jobs/{job_id}/results/{parser_name}`| Fetch one parser result | - | `ParseResultResponse` (`markdown`, `elapsed_seconds`) | `404` (parser result missing) |
 
 ## Typical Flow
 
