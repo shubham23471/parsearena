@@ -40,6 +40,14 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
+export function getParserMarkdownDownloadUrl(jobId: string, parserName: string): string {
+  return `${API_BASE_URL}/api/v1/jobs/${jobId}/results/${encodeURIComponent(parserName)}/download`;
+}
+
+export function getAllMarkdownDownloadsUrl(jobId: string): string {
+  return `${API_BASE_URL}/api/v1/jobs/${jobId}/results/download/all`;
+}
+
 type UploadProgressHandler = (percent: number) => void;
 
 export async function uploadPdfWithProgress(

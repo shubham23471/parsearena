@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { getParserMarkdownDownloadUrl } from "@/api";
 import { MarkdownViewer } from "@/components/markdown-viewer";
 import type { ParseResult, ParserStatus, ViewMode } from "@/types";
 
 type ParserPanelProps = {
+  jobId: string;
   title: string;
   parserNames: string[];
   activeParser: string | null;
@@ -37,6 +39,7 @@ function getDeviceLabel(device: "cuda" | "mps" | "cpu" | null | undefined): stri
 }
 
 export function ParserPanel({
+  jobId,
   title,
   parserNames,
   activeParser,
@@ -75,6 +78,8 @@ export function ParserPanel({
   }, [activeParser]);
 
   const dropdownOptions = completedParserOptions.length > 0 ? completedParserOptions : parserNames;
+  const parserDownloadUrl = activeParser ? getParserMarkdownDownloadUrl(jobId, activeParser) : null;
+  const canDownloadParserOutput = Boolean(activeParser && result && parserStatus?.status === "completed");
 
   return (
     <section className="relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -97,27 +102,37 @@ export function ParserPanel({
         </div>
 
         {showParserSelector && hasParserChoices && (
-          <select
-            value={activeParser ?? parserNames[0] ?? ""}
-            onChange={(event) => {
-              onParserChange(event.target.value);
-            }}
-            className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
-          >
-            {dropdownOptions.map((parserName) => {
-              const status = parserStatuses[parserName];
-              const isVisibleElsewhere = otherVisibleParsers.includes(parserName) && parserName !== activeParser;
-              const timing =
-                status?.elapsed_seconds !== null && status?.elapsed_seconds !== undefined
-                  ? ` · ${status.elapsed_seconds.toFixed(1)}s`
-                  : "";
-              return (
-                <option key={parserName} value={parserName} disabled={isVisibleElsewhere}>
-                  {`${parserName}${timing}${isVisibleElsewhere ? " · Already visible" : ""}`}
-                </option>
-              );
-            })}
-          </select>
+          <div className="flex items-center gap-2">
+            {canDownloadParserOutput && parserDownloadUrl && (
+              <a
+                href={parserDownloadUrl}
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              >
+                Download .md
+              </a>
+            )}
+            <select
+              value={activeParser ?? parserNames[0] ?? ""}
+              onChange={(event) => {
+                onParserChange(event.target.value);
+              }}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+            >
+              {dropdownOptions.map((parserName) => {
+                const status = parserStatuses[parserName];
+                const isVisibleElsewhere = otherVisibleParsers.includes(parserName) && parserName !== activeParser;
+                const timing =
+                  status?.elapsed_seconds !== null && status?.elapsed_seconds !== undefined
+                    ? ` · ${status.elapsed_seconds.toFixed(1)}s`
+                    : "";
+                return (
+                  <option key={parserName} value={parserName} disabled={isVisibleElsewhere}>
+                    {`${parserName}${timing}${isVisibleElsewhere ? " · Already visible" : ""}`}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
         )}
       </div>
 
@@ -157,6 +172,16 @@ export function ParserPanel({
               );
             })}
           </div>
+          {canDownloadParserOutput && parserDownloadUrl && (
+            <div className="flex justify-end pb-2 pr-1">
+              <a
+                href={parserDownloadUrl}
+                className="rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+              >
+                Download .md
+              </a>
+            </div>
+          )}
         </div>
       )}
 

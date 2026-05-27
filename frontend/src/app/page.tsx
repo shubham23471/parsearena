@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { getAllMarkdownDownloadsUrl } from "@/api";
 import { ParseProgress } from "@/components/parse-progress";
 import { DiffSummaryCard } from "@/components/diff-summary";
 import { DiffViewer } from "@/components/diff-viewer";
@@ -200,6 +201,10 @@ export default function HomePage() {
     () => completedParserTabs.filter((parserName) => Boolean(allResults[parserName]?.markdown)),
     [allResults, completedParserTabs]
   );
+  const allMarkdownDownloadUrl = useMemo(
+    () => (jobId ? getAllMarkdownDownloadsUrl(jobId) : null),
+    [jobId]
+  );
   const diffResult = useMemo(() => {
     if (viewMode !== "diff" || !diffParserA || !diffParserB) {
       return null;
@@ -320,6 +325,17 @@ export default function HomePage() {
               />
             )}
 
+            {allMarkdownDownloadUrl && completedParserWithResults.length > 0 && (
+              <div className="flex justify-end">
+                <a
+                  href={allMarkdownDownloadUrl}
+                  className="rounded border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                >
+                  Download all markdowns (.zip)
+                </a>
+              </div>
+            )}
+
             <section className="space-y-4 rounded-lg border border-border bg-card p-4">
               <WorkspaceToolbar
                 isExtraLargeViewport={isExtraLargeViewport}
@@ -423,6 +439,7 @@ export default function HomePage() {
                   )}
 
                   <ParserPanel
+                    jobId={jobId}
                     title={viewMode === "compare" ? "Parser A" : "Parse Result"}
                     parserNames={activeParserChoices}
                     activeParser={activeParserTab}
@@ -450,6 +467,7 @@ export default function HomePage() {
 
                   {hasSecondaryPanel && (
                     <ParserPanel
+                      jobId={jobId}
                       title={viewMode === "compare" ? "Parser B" : "Secondary Parser"}
                       parserNames={completedParserTabs}
                       activeParser={secondaryParserTab}

@@ -31,7 +31,7 @@ class _ParserDefinition:
 PARSER_DEFINITIONS: list[_ParserDefinition] = [
     _ParserDefinition(
         name="pymupdf4llm",
-        display_name="PyMuPDF4LLM",
+        display_name="PyMuPDF4LLM (Baseline)",
         description="Fast local markdown extraction using PyMuPDF4LLM.",
         is_local=True,
         requires_api_key=False,
@@ -72,7 +72,7 @@ PARSER_DEFINITIONS: list[_ParserDefinition] = [
     _ParserDefinition(
         name="markitdown",
         display_name="MarkItDown",
-        description="Microsoft parser for converting PDFs and other document formats to Markdown.",
+        description="Microsoft parser for converting PDFs and other document formats to Markdown (CPU pipeline).",
         is_local=True,
         requires_api_key=False,
         api_key_env_var=None,

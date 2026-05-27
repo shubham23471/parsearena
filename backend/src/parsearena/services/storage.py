@@ -196,6 +196,44 @@ class StorageService:
             "elapsed_seconds": parser_row["elapsed_seconds"],
         }
 
+    async def get_markdown_path(self, job_id: str, parser_name: str) -> Path:
+        parser_row = await self.database.fetchone(
+            """
+            SELECT status
+            FROM parser_results
+            WHERE job_id = ? AND parser_name = ?
+            """,
+            (job_id, parser_name),
+        )
+        if parser_row is None:
+            raise FileNotFoundError(f"Result metadata not found for parser '{parser_name}'.")
+        if parser_row["status"] != "completed":
+            raise FileNotFoundError(f"Result is not ready for parser '{parser_name}'.")
+
+        markdown_path = self._job_dir(job_id) / f"{parser_name}.md"
+        if not markdown_path.exists():
+            raise FileNotFoundError(f"Result file not found for parser '{parser_name}'.")
+        return markdown_path
+
+    async def get_completed_markdown_paths(self, job_id: str) -> dict[str, Path]:
+        job_dir = self._job_dir(job_id)
+        rows = await self.database.fetchall(
+            """
+            SELECT parser_name
+            FROM parser_results
+            WHERE job_id = ? AND status = 'completed'
+            ORDER BY parser_name ASC
+            """,
+            (job_id,),
+        )
+        completed_paths: dict[str, Path] = {}
+        for row in rows:
+            parser_name = str(row["parser_name"])
+            markdown_path = job_dir / f"{parser_name}.md"
+            if markdown_path.exists():
+                completed_paths[parser_name] = markdown_path
+        return completed_paths
+
     async def get_metadata(self, job_id: str) -> dict:
         job_row = await self.database.fetchone(
             """

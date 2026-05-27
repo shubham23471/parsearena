@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
+import zipfile
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from parsearena.api.deps import get_parser_service, get_storage
 from parsearena.schemas.jobs import (
@@ -79,6 +82,51 @@ async def get_job_status(
         job_id=metadata["job_id"],
         status=metadata["status"],
         parsers=metadata.get("parsers", {}),
+    )
+
+
+@router.get("/jobs/{job_id}/results/download/all")
+async def download_all_parse_results(
+    job_id: str,
+    storage: StorageService = Depends(get_storage),
+) -> StreamingResponse:
+    try:
+        markdown_paths = await storage.get_completed_markdown_paths(job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not markdown_paths:
+        raise HTTPException(status_code=404, detail="No completed parser outputs are available for download.")
+
+    archive_buffer = io.BytesIO()
+    with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for parser_name, markdown_path in markdown_paths.items():
+            archive.write(markdown_path, arcname=f"{parser_name}.md")
+    archive_buffer.seek(0)
+
+    return StreamingResponse(
+        archive_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{job_id}_markdown_outputs.zip"',
+        },
+    )
+
+
+@router.get("/jobs/{job_id}/results/{parser_name}/download")
+async def download_parse_result(
+    job_id: str,
+    parser_name: str,
+    storage: StorageService = Depends(get_storage),
+) -> FileResponse:
+    try:
+        markdown_path = await storage.get_markdown_path(job_id, parser_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return FileResponse(
+        markdown_path,
+        media_type="text/markdown",
+        filename=f"{job_id}_{parser_name}.md",
     )
 
 
