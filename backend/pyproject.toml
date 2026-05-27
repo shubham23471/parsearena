@@ -12,6 +12,7 @@ dependencies = [
   "pydantic-settings",
   "python-multipart",
   "uvicorn[standard]",
+  "markitdown[pdf]>=0.1.6",
 ]
 
 [build-system]

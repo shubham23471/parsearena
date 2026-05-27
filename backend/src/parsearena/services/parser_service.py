@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import asyncio
 
-from parsearena.parsers import DoclingParser, MarkerParser, PyMuPDF4LLMParser, UnstructuredParser
+from parsearena.parsers import (
+    DoclingParser,
+    MarkItDownParser,
+    MarkerParser,
+    PyMuPDF4LLMParser,
+    UnstructuredParser,
+)
 from parsearena.parsers.base import BaseParser, ParseResult
 from parsearena.parsers.registry import get_parser_registry
 from parsearena.services.storage import StorageService
@@ -16,6 +22,7 @@ class ParserService:
             "docling": DoclingParser(),
             "marker": MarkerParser(),
             "unstructured": UnstructuredParser(),
+            "markitdown": MarkItDownParser(),
         }
         available_names = {item.name for item in get_parser_registry() if item.is_available}
         self._parsers = {

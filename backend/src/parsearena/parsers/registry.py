@@ -69,6 +69,16 @@ PARSER_DEFINITIONS: list[_ParserDefinition] = [
         install_command="uv add \"unstructured[pdf]\"",
         module_to_probe="unstructured",
     ),
+    _ParserDefinition(
+        name="markitdown",
+        display_name="MarkItDown",
+        description="Microsoft parser for converting PDFs and other document formats to Markdown.",
+        is_local=True,
+        requires_api_key=False,
+        api_key_env_var=None,
+        install_command="uv add \"markitdown[pdf]\"",
+        module_to_probe="markitdown",
+    ),
 ]
 
 
