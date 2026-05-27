@@ -2,6 +2,7 @@
 # old files 
 old_files/
 data/
+prds_internal
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
