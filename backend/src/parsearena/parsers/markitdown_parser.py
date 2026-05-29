@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import time
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,14 @@ from parsearena.parsers.base import ParseResult
 class MarkItDownParser:
     name = "markitdown"
 
+    def __init__(self) -> None:
+        self._last_plugins_enabled = True
+
     def get_execution_device(self) -> str:
         return "cpu"
+
+    def get_config_summary(self) -> dict[str, Any]:
+        return {"plugins_enabled": self._last_plugins_enabled}
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -27,8 +34,16 @@ class MarkItDownParser:
             ) from exc
 
         started_at = time.perf_counter()
-        converter = MarkItDown(enable_plugins=False)
-        conversion_result = self._convert(converter, pdf_path)
+        plugins_enabled = True
+        try:
+            converter = MarkItDown(enable_plugins=True)
+            conversion_result = self._convert(converter, pdf_path)
+        except Exception:
+            converter = MarkItDown(enable_plugins=False)
+            conversion_result = self._convert(converter, pdf_path)
+            plugins_enabled = False
+
+        self._last_plugins_enabled = plugins_enabled
         markdown = self._extract_markdown(conversion_result)
         elapsed_seconds = time.perf_counter() - started_at
 
@@ -39,7 +54,12 @@ class MarkItDownParser:
             markdown=markdown,
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
-            metadata={"execution_device": "cpu"},
+            metadata={
+                "execution_device": "cpu",
+                "plugins_enabled": plugins_enabled,
+                "config_summary": self.get_config_summary(),
+                "library_version": self._get_library_version(),
+            },
         )
 
     def _convert(self, converter: Any, pdf_path: Path) -> Any:
@@ -56,3 +76,9 @@ class MarkItDownParser:
         if isinstance(conversion_result, str):
             return conversion_result
         raise ValueError("MarkItDown returned an unexpected conversion result payload.")
+
+    def _get_library_version(self) -> str | None:
+        try:
+            return importlib.metadata.version("markitdown")
+        except importlib.metadata.PackageNotFoundError:
+            return None

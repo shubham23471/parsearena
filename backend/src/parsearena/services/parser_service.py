@@ -106,6 +106,10 @@ class ParserService:
                 )
 
     async def _save_parse_result(self, job_id: str, parser_name: str, parse_result: ParseResult) -> None:
+        parser = self._get_parser(parser_name)
+        metadata = parse_result.metadata or {}
+        metadata["config_summary"] = self._get_config_summary(parser, metadata)
+        parse_result.metadata = metadata
         execution_device = self._extract_execution_device(parse_result)
         await self.storage.save_result(
             job_id=job_id,
@@ -137,3 +141,18 @@ class ParserService:
         if value in {"cuda", "mps", "cpu"}:
             return value
         return None
+
+    def _get_config_summary(
+        self,
+        parser: BaseParser,
+        metadata: dict[str, object],
+    ) -> dict[str, object]:
+        existing = metadata.get("config_summary")
+        if isinstance(existing, dict):
+            return existing
+        method = getattr(parser, "get_config_summary", None)
+        if callable(method):
+            config_summary = method()
+            if isinstance(config_summary, dict):
+                return config_summary
+        return {}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import inspect
 import threading
 import time
@@ -20,6 +21,12 @@ class MarkerParser:
 
     def get_execution_device(self) -> str:
         return detect_best_device()
+
+    def get_config_summary(self) -> dict[str, object]:
+        return {
+            "device": self.get_execution_device(),
+            "model_cache": "in_memory_by_device",
+        }
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -86,6 +93,8 @@ class MarkerParser:
         metadata = {
             "image_count": len(images) if images is not None else 0,
             "execution_device": execution_device,
+            "config_summary": self.get_config_summary(),
+            "library_version": self._get_library_version(),
         }
         return ParseResult(
             markdown=str(text),
@@ -93,3 +102,9 @@ class MarkerParser:
             page_count=page_count,
             metadata=metadata,
         )
+
+    def _get_library_version(self) -> str | None:
+        try:
+            return importlib.metadata.version("marker-pdf")
+        except importlib.metadata.PackageNotFoundError:
+            return None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import time
 from pathlib import Path
 
@@ -13,6 +14,12 @@ class DoclingParser:
 
     def get_execution_device(self) -> str:
         return detect_best_device()
+
+    def get_config_summary(self) -> dict[str, object]:
+        return {
+            "accelerator": self.get_execution_device(),
+            "pipeline": "default",
+        }
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -49,7 +56,11 @@ class DoclingParser:
             markdown=str(markdown),
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
-            metadata={"execution_device": execution_device},
+            metadata={
+                "execution_device": execution_device,
+                "config_summary": self.get_config_summary(),
+                "library_version": self._get_library_version(),
+            },
         )
 
     def _build_converter(self, *, preferred_device: str, converter_cls: type) -> object:
@@ -89,3 +100,9 @@ class DoclingParser:
     def _is_meta_tensor_error(self, exc: Exception) -> bool:
         message = str(exc)
         return "Cannot copy out of meta tensor" in message or "to_empty()" in message
+
+    def _get_library_version(self) -> str | None:
+        try:
+            return importlib.metadata.version("docling")
+        except importlib.metadata.PackageNotFoundError:
+            return None

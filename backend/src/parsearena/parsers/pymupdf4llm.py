@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import time
 from pathlib import Path
 
@@ -12,6 +13,9 @@ class PyMuPDF4LLMParser:
 
     def get_execution_device(self) -> str:
         return "cpu"
+
+    def get_config_summary(self) -> dict[str, object]:
+        return {}
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -36,5 +40,15 @@ class PyMuPDF4LLMParser:
             markdown=str(markdown),
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
-            metadata={"execution_device": "cpu"},
+            metadata={
+                "execution_device": "cpu",
+                "config_summary": self.get_config_summary(),
+                "library_version": self._get_library_version(),
+            },
         )
+
+    def _get_library_version(self) -> str | None:
+        try:
+            return importlib.metadata.version("pymupdf4llm")
+        except importlib.metadata.PackageNotFoundError:
+            return None
