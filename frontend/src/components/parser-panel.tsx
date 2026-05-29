@@ -56,6 +56,29 @@ function toExecutionDevice(
   return null;
 }
 
+function getParserCaveat(parserName: string | null): string | null {
+  if (!parserName) {
+    return null;
+  }
+  const normalized = parserName.toLowerCase();
+  if (normalized === "unstructured") {
+    return "Running with strategy='auto'. For higher quality, Unstructured recommends strategy='hi_res'.";
+  }
+  if (normalized === "marker") {
+    return "Running full ML pipeline with default model weights.";
+  }
+  if (normalized === "docling") {
+    return "Running with default pipeline options. Table structure extraction uses default model.";
+  }
+  if (normalized === "pymupdf4llm") {
+    return "Rule-based extraction, no ML models. Fastest but no OCR capability.";
+  }
+  if (normalized === "markitdown") {
+    return "Microsoft's converter with PDF plugins enabled.";
+  }
+  return null;
+}
+
 export function ParserPanel({
   jobId,
   title,
@@ -107,6 +130,7 @@ export function ParserPanel({
   const dropdownOptions = completedParserOptions.length > 0 ? completedParserOptions : parserNames;
   const parserDownloadUrl = activeParser ? getParserMarkdownDownloadUrl(jobId, activeParser) : null;
   const canDownloadParserOutput = Boolean(activeParser && result && parserStatus?.status === "completed");
+  const parserCaveat = getParserCaveat(activeParser);
 
   return (
     <section className="relative flex h-full flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -114,6 +138,15 @@ export function ParserPanel({
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">{title}</span>
           {activeParser && <span className="rounded bg-muted px-2 py-1 text-xs font-medium">{activeParser}</span>}
+          {parserCaveat && (
+            <span
+              className="inline-flex h-5 w-5 items-center justify-center rounded border border-border text-[10px] text-muted-foreground"
+              title={parserCaveat}
+              aria-label="Parser caveat"
+            >
+              ⓘ
+            </span>
+          )}
           {parserStatus?.elapsed_seconds !== null &&
             parserStatus?.elapsed_seconds !== undefined &&
             parserStatus.status === "completed" && (

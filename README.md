@@ -1,37 +1,62 @@
 # ParseArena 🛡️
 
-**A local-first, open-source playground to visually compare, evaluate, and diff PDF-to-Markdown parsers side-by-side.**
+**A local-first, open-source playground to visually compare PDF-to-Markdown parsers side-by-side — using your own documents.**
 
-Choosing the right PDF parser for your Retrieval-Augmented Generation (RAG) pipeline is hard. Benchmarks are often run on clean, academic datasets, but your production documents are messy contracts, complex tables, multi-column research papers, and scanned invoices.
+Choosing a parser for real-world RAG pipelines is hard. Your PDFs are contracts, scans, multi-column reports, and table-heavy documents, and parser behavior changes a lot by file type.
 
-**ParseArena** lets you drag and drop your own PDFs, run them through multiple popular parsers simultaneously, and compare the original document next to each parser's Markdown output. No writing glue code, no configuring databases, and no uploading your private data to third-party APIs.
+**ParseArena** lets you upload your own PDFs, run multiple parsers, inspect outputs side-by-side, and make document-specific decisions without writing glue code.
 
 ---
 
 ## 🌟 Key Features
 
-- **Side-by-Side Visualizer:** Render your original PDF right next to the parsed Markdown output with synchronized scrolling (Linked Scrolling).
-- **Multi-Parser Parallel Execution:** Trigger multiple parsers at once and watch their progress, runtimes, and hardware devices (CPU/GPU) in real time.
+- **Side-by-Side Visualizer:** View the original PDF next to parser Markdown with linked scrolling.
+- **Parallel Parser Runs:** Trigger multiple parsers together and inspect progress, timing, and execution device (CPU/GPU).
 - **Multiple View Modes:**
-  - **Tab Mode:** View the PDF alongside a single parser's output (optimized for laptops).
-  - **Split Mode:** View the PDF alongside two parser outputs simultaneously (optimized for wider screens).
-  - **Compare Mode:** Hide the PDF and compare two parser outputs side-by-side.
-  - **Diff Mode:** Computes a block-level structural diff (headings, paragraphs, lists, tables) highlighting what was added, removed, or modified between two parser outputs.
-- **Dynamic Parser Detection:** The backend auto-detects which libraries are installed in your environment, presenting copy-paste setup tooltips in the UI for missing ones.
-- **Local-First & Lightweight:** Built using Fast API, SQLite, Next.js, and Tailwind CSS. Data is stored on disk and metadata in a zero-config SQLite database.
+  - **Tab Mode:** PDF + one parser output.
+  - **Split Mode:** PDF + two parser outputs.
+  - **Compare Mode:** Two parser outputs without PDF.
+  - **Diff Mode:** Structural diff view for headings, paragraphs, lists, and tables.
+- **Dynamic Parser Detection:** Installed parsers are auto-detected and missing setup commands are shown in UI.
+- **Local-First Stack:** FastAPI + SQLite + Next.js + Tailwind. Your files stay local.
+
+---
+
+## ⚖️ Methodology & Fairness
+
+ParseArena is a **comparison playground**, not a benchmark suite.
+
+- **Default settings only:** Parsers run with out-of-the-box configuration to represent first-run behavior.
+- **Not maximum capability:** Libraries like Unstructured and Docling expose advanced tuning knobs that can improve results; ParseArena does not auto-tune parser-specific configs.
+- **Configuration is visible:** Results include parser config, library version, execution details, and timing breakdown in the UI (`ⓘ Details`).
+- **Your documents, your decision:** The goal is to help you choose a good starting point for your files. No universal winner is assumed.
+
+See full methodology: `docs/wiki/METHODOLOGY.md`.
 
 ---
 
 ## 📦 Supported Parsers
 
-ParseArena supports both lightweight layout extractors and heavy deep learning models. 
+| Parser | Type | Default Config | Key Features | System Requirements | Install Command |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **PyMuPDF4LLM** | Local (Rule-based) | `page_chunks=True` | Fast markdown extraction with low memory usage. | None | `uv add pymupdf4llm` |
+| **Docling** | Local (ML-based) | Default pipeline + device auto-detect | Strong layout and table extraction. | None | `uv add docling` |
+| **Marker** | Local (ML-based) | Default model weights + device auto-detect | High-fidelity OCR and structure recovery. | PyTorch (GPU recommended) | `uv add marker-pdf` |
+| **Unstructured** | Local (Rule/ML) | `strategy="auto"` | Modular PDF partitioning with structural elements. | `tesseract-ocr`, `poppler-utils` | `uv add "unstructured[pdf]"` |
+| **MarkItDown** | Local (CPU) | `enable_plugins=True` (fallback to `False`) | Microsoft converter with broad format support. | None | `uv add "markitdown[pdf]"` |
 
-| Parser | Type | Key Features | System Requirements | Install Command |
-| :--- | :--- | :--- | :--- | :--- |
-| **PyMuPDF4LLM** | Local (Rule-based) | Blazing fast, clean markdown structure, low memory footprint. | None | `uv add pymupdf4llm` |
-| **Docling** (IBM) | Local (ML-based) | Outstanding layout analysis, table extraction, and reading order preservation. | None | `uv add docling` |
-| **Marker** | Local (ML-based) | High-fidelity OCR and formatting recovery (tuned for papers and books). | PyTorch (GPU recommended) | `uv add marker-pdf` |
-| **Unstructured** | Local (Rule/ML) | Modular document partitioner with traditional layout algorithms. | `tesseract-ocr`, `poppler-utils` | `uv add "unstructured[pdf]"` |
+---
+
+## 📊 What's Measured
+
+ParseArena computes descriptive metrics for each parser output:
+
+- **Timing:** total wall-clock latency, plus model-load and parse-only timing where available.
+- **Structure:** headings, tables, lists, code blocks, image references.
+- **Quality signals:** noise-like lines, unicode replacement characters, empty-line ratio.
+- **Chunk simulation:** heading-aware chunk stats and preview chunks for RAG-oriented inspection.
+
+These are **inspection signals**, not absolute quality scores.
 
 ---
 
@@ -44,73 +69,44 @@ ParseArena supports both lightweight layout extractors and heavy deep learning m
   - **macOS:** `brew install tesseract poppler`
   - **Ubuntu/Debian:** `sudo apt install tesseract-ocr poppler-utils`
 
----
-
 ### 1. Setup Backend
 
-Clone the repository and navigate to the backend directory:
 ```bash
 cd backend
-```
-
-Create a virtual environment and install core dependencies:
-```bash
 uv sync
 ```
 
-#### Installing Parsers
-You can install specific parsers or install all of them at once using `uv` dependency groups:
+Install parser groups as needed:
 
-*   **Install all parsers:**
-    ```bash
-    uv sync --group parsers-all
-    ```
-*   **Install all parsers + CUDA GPU acceleration (Linux):**
-    ```bash
-    uv sync --group parsers-all --group gpu-cuda
-    ```
-*   **Install all parsers + Metal GPU acceleration (macOS):**
-    ```bash
-    uv sync --group parsers-all --group gpu-mps
-    ```
+- **All parsers:** `uv sync --group parsers-all`
+- **All parsers + CUDA (Linux):** `uv sync --group parsers-all --group gpu-cuda`
+- **All parsers + Metal (macOS):** `uv sync --group parsers-all --group gpu-mps`
 
-Start the FastAPI backend (runs on port `8000` by default):
+Run backend:
+
 ```bash
 uv run uvicorn parsearena.main:app --reload
 ```
 
----
-
 ### 2. Setup Frontend
 
-Open a new terminal window and navigate to the frontend directory:
 ```bash
 cd frontend
-```
-
-Install dependencies:
-```bash
 npm install
-```
-
-Start the Next.js development server (runs on port `3000` by default):
-```bash
 npm run dev
 ```
 
-Visit **`http://localhost:3000`** in your browser, drag in a PDF, and start comparing!
+Open `http://localhost:3000` and start comparing parser outputs.
 
 ---
 
 ## ⌨️ Keyboard Shortcuts
 
-Power through parser comparisons with built-in shortcuts:
-
-*   `1` - `9`: Switch active parser tab (in Tab Mode).
-*   `[` / `]`: Cycle to the previous / next parser.
-*   `v` then `t` / `s` / `c`: Switch view mode (Tab, Split, Compare).
-*   `l`: Toggle Linked Scrolling.
-*   `?`: Toggle keyboard shortcut help popup.
+- `1` - `9`: switch parser tab (Tab mode)
+- `[` / `]`: previous / next parser
+- `v` then `t` / `s` / `c`: switch view mode
+- `l`: toggle linked scrolling
+- `?`: toggle shortcut help
 
 ---
 

@@ -49,6 +49,8 @@ export default function HomePage() {
   const [diffParserB, setDiffParserB] = useState<string | null>(null);
   const [jobInfoExpanded, setJobInfoExpanded] = useState(true);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [showMethodologyBanner, setShowMethodologyBanner] = useState(false);
+  const [methodologyHintExpanded, setMethodologyHintExpanded] = useState(false);
   const { activePdfPage, setActivePdfPage, scrollSourceId, handlePageChange } = useSyncedPdfPage({
     linkedScrollingEnabled,
     pdfPageCount
@@ -165,6 +167,14 @@ export default function HomePage() {
     }
     window.localStorage.setItem("parsearena:view-mode", viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const dismissed = window.sessionStorage.getItem("parsearena:methodology-banner-dismissed");
+    setShowMethodologyBanner(dismissed !== "1");
+  }, []);
 
   useEffect(() => {
     if (parseState === "completed") {
@@ -386,6 +396,44 @@ export default function HomePage() {
                   Download all markdowns (.zip)
                 </a>
               </div>
+            )}
+
+            {showMethodologyBanner && (
+              <section className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p>
+                    All parsers run with default settings. Results reflect out-of-the-box behavior, not maximum capability.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMethodologyHintExpanded((previous) => !previous);
+                      }}
+                      className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[11px] hover:bg-sky-500/30"
+                    >
+                      Learn more
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMethodologyBanner(false);
+                        if (typeof window !== "undefined") {
+                          window.sessionStorage.setItem("parsearena:methodology-banner-dismissed", "1");
+                        }
+                      }}
+                      className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[11px] hover:bg-sky-500/30"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+                {methodologyHintExpanded && (
+                  <p className="mt-2 text-[11px] text-sky-100/90">
+                    See detailed methodology in <code className="rounded bg-sky-950/40 px-1">docs/wiki/METHODOLOGY.md</code>.
+                  </p>
+                )}
+              </section>
             )}
 
             <section className="space-y-4 rounded-lg border border-border bg-card p-4">
