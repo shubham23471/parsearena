@@ -17,8 +17,8 @@ type ParserPanelProps = {
   activePage: number;
   totalPages: number;
   linkedScrollingEnabled: boolean;
-  onActivePageChange: (page: number, sourceId: string) => void;
-  scrollSourceId: string;
+  isScrollSource: boolean;
+  onPageChange: (page: number) => void;
   viewMode: ViewMode;
   otherVisibleParsers?: string[];
   emptyMessage?: string;
@@ -49,8 +49,8 @@ export function ParserPanel({
   activePage,
   totalPages,
   linkedScrollingEnabled,
-  onActivePageChange,
-  scrollSourceId,
+  isScrollSource,
+  onPageChange,
   viewMode,
   otherVisibleParsers = [],
   emptyMessage,
@@ -219,8 +219,8 @@ export function ParserPanel({
                 activePage={activePage}
                 totalPages={totalPages}
                 linkedScrollingEnabled={linkedScrollingEnabled}
-                onActivePageChange={onActivePageChange}
-                scrollSourceId={scrollSourceId}
+                isScrollSource={isScrollSource}
+                onPageChange={onPageChange}
               />
               {linkedScrollingEnabled && (
                 <div className="pointer-events-none absolute bottom-3 right-3 rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">

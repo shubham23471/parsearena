@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 type UseSyncedPdfPageOptions = {
@@ -11,61 +11,63 @@ type UseSyncedPdfPageOptions = {
 type UseSyncedPdfPageResult = {
   activePdfPage: number;
   setActivePdfPage: Dispatch<SetStateAction<number>>;
-  handleSyncedPageChange: (page: number, sourceId: string) => void;
+  scrollSourceId: string | null;
+  handlePageChange: (page: number, sourceId: string) => void;
 };
+
+const SCROLL_LOCK_DURATION_MS = 800;
 
 export function useSyncedPdfPage({
   linkedScrollingEnabled,
   pdfPageCount
 }: UseSyncedPdfPageOptions): UseSyncedPdfPageResult {
   const [activePdfPage, setActivePdfPage] = useState(1);
-  const activePdfPageRef = useRef<number>(1);
-  const scrollingSourceRef = useRef<string | null>(null);
-  const scrollingSourceTimeoutRef = useRef<number | null>(null);
+  const [scrollSourceId, setScrollSourceId] = useState<string | null>(null);
+  
+  // Use refs to avoid stale closures in the callback
+  const scrollSourceRef = useRef<string | null>(null);
+  const lockTimeoutRef = useRef<number | null>(null);
+  const lastPageRef = useRef<number>(1);
 
-  useEffect(() => {
-    activePdfPageRef.current = activePdfPage;
-  }, [activePdfPage]);
-
-  useEffect(() => {
-    if (activePdfPage <= pdfPageCount) {
-      return;
-    }
-    setActivePdfPage(Math.max(pdfPageCount, 1));
-  }, [activePdfPage, pdfPageCount]);
-
-  useEffect(() => {
-    return () => {
-      if (scrollingSourceTimeoutRef.current !== null) {
-        window.clearTimeout(scrollingSourceTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleSyncedPageChange = useCallback(
+  const handlePageChange = useCallback(
     (page: number, sourceId: string): void => {
       if (!linkedScrollingEnabled) {
         return;
       }
+
       const normalizedPage = Math.min(Math.max(page, 1), Math.max(pdfPageCount, 1));
-      if (normalizedPage === activePdfPageRef.current) {
-        return;
-      }
-      if (scrollingSourceRef.current !== null && scrollingSourceRef.current !== sourceId) {
+      
+      // Skip if same page
+      if (normalizedPage === lastPageRef.current) {
         return;
       }
 
-      scrollingSourceRef.current = sourceId;
-      setActivePdfPage(normalizedPage);
-      if (scrollingSourceTimeoutRef.current !== null) {
-        window.clearTimeout(scrollingSourceTimeoutRef.current);
+      // If another source owns the scroll lock, ignore this update
+      if (scrollSourceRef.current !== null && scrollSourceRef.current !== sourceId) {
+        return;
       }
-      scrollingSourceTimeoutRef.current = window.setTimeout(() => {
-        scrollingSourceRef.current = null;
-      }, 250);
+
+      // Set this source as the scroll owner
+      scrollSourceRef.current = sourceId;
+      setScrollSourceId(sourceId);
+      
+      lastPageRef.current = normalizedPage;
+      setActivePdfPage(normalizedPage);
+
+      // Clear any existing timeout
+      if (lockTimeoutRef.current !== null) {
+        window.clearTimeout(lockTimeoutRef.current);
+      }
+
+      // Release scroll lock after delay
+      lockTimeoutRef.current = window.setTimeout(() => {
+        scrollSourceRef.current = null;
+        setScrollSourceId(null);
+        lockTimeoutRef.current = null;
+      }, SCROLL_LOCK_DURATION_MS);
     },
     [linkedScrollingEnabled, pdfPageCount]
   );
 
-  return { activePdfPage, setActivePdfPage, handleSyncedPageChange };
+  return { activePdfPage, setActivePdfPage, scrollSourceId, handlePageChange };
 }

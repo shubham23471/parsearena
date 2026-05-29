@@ -34,6 +34,10 @@ class MarkItDownParser:
             ) from exc
 
         started_at = time.perf_counter()
+        
+        with pymupdf.open(pdf_path) as document:
+            page_count = document.page_count
+        
         plugins_enabled = True
         try:
             converter = MarkItDown(enable_plugins=True)
@@ -44,11 +48,13 @@ class MarkItDownParser:
             plugins_enabled = False
 
         self._last_plugins_enabled = plugins_enabled
-        markdown = self._extract_markdown(conversion_result)
+        full_markdown = self._extract_markdown(conversion_result)
+        
+        # MarkItDown doesn't provide page-level output, so we use pymupdf 
+        # to extract per-page text and create page-aligned markdown
+        markdown = self._create_page_aligned_markdown(pdf_path, full_markdown, page_count)
+        
         elapsed_seconds = time.perf_counter() - started_at
-
-        with pymupdf.open(pdf_path) as document:
-            page_count = document.page_count
 
         return ParseResult(
             markdown=markdown,
@@ -61,6 +67,45 @@ class MarkItDownParser:
                 "library_version": self._get_library_version(),
             },
         )
+
+    def _create_page_aligned_markdown(
+        self, 
+        pdf_path: Path, 
+        full_markdown: str, 
+        page_count: int
+    ) -> str:
+        """
+        MarkItDown doesn't support page-level output.
+        We extract per-page raw text from pymupdf and use that for page alignment.
+        The full markitdown output goes on page 1, with raw text hints for other pages.
+        """
+        try:
+            import pymupdf
+        except ImportError:
+            # Can't do page alignment without pymupdf
+            return full_markdown
+        
+        page_texts: list[str] = []
+        
+        with pymupdf.open(pdf_path) as document:
+            for page_num in range(page_count):
+                page = document[page_num]
+                # Get raw text for this page
+                raw_text = page.get_text("text").strip()
+                
+                if page_num == 0:
+                    # First page gets the full markitdown output
+                    # This ensures we don't lose any formatting
+                    page_texts.append(full_markdown.strip())
+                else:
+                    # Other pages get raw text extraction
+                    # This provides page alignment even if formatting is basic
+                    if raw_text:
+                        page_texts.append(raw_text)
+                    else:
+                        page_texts.append("")
+        
+        return "\f".join(page_texts)
 
     def _convert(self, converter: Any, pdf_path: Path) -> Any:
         convert_local = getattr(converter, "convert_local", None)

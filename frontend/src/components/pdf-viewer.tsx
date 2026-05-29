@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 
 import { getApiBaseUrl } from "@/api";
@@ -9,110 +9,162 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 
 type PdfViewerProps = {
   jobId: string;
-  activePage?: number;
-  linkedScrollingEnabled?: boolean;
-  scrollSourceId: string;
-  onActivePageChange?: (page: number, sourceId: string) => void;
+  activePage: number;
+  linkedScrollingEnabled: boolean;
+  isScrollSource: boolean;
+  onPageChange: (page: number) => void;
   onPageCountChange?: (count: number) => void;
 };
+
+function getVisiblePageNumber(
+  container: HTMLElement,
+  pageElements: Map<number, HTMLElement>,
+  pageCount: number
+): number {
+  const containerRect = container.getBoundingClientRect();
+  const containerTop = containerRect.top;
+  let bestPage = 1;
+  let bestVisibility = 0;
+
+  for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+    const element = pageElements.get(pageNum);
+    if (!element) continue;
+
+    const rect = element.getBoundingClientRect();
+    const visibleTop = Math.max(rect.top, containerTop);
+    const visibleBottom = Math.min(rect.bottom, containerRect.bottom);
+    const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+    const visibility = visibleHeight / rect.height;
+
+    // Prefer the page that has more than 50% visible, or the one with most visibility
+    if (visibility > 0.5) {
+      return pageNum;
+    }
+    if (visibility > bestVisibility) {
+      bestVisibility = visibility;
+      bestPage = pageNum;
+    }
+  }
+
+  return bestPage;
+}
 
 export function PdfViewer({
   jobId,
   activePage,
-  linkedScrollingEnabled = false,
-  scrollSourceId,
-  onActivePageChange,
+  linkedScrollingEnabled,
+  isScrollSource,
+  onPageChange,
   onPageCountChange
 }: PdfViewerProps) {
   const [pageCount, setPageCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const lastProgrammaticPageRef = useRef<number | null>(null);
-  const suppressObserverUntilRef = useRef<number>(0);
-  const lastReportedPageRef = useRef<number | null>(null);
+  const isScrollingProgrammatically = useRef(false);
+  const lastScrolledToPage = useRef<number | null>(null);
   const pdfUrl = useMemo(() => `${getApiBaseUrl()}/api/v1/jobs/${jobId}/pdf`, [jobId]);
 
+  // Report page count when it changes
   useEffect(() => {
     if (pageCount > 0 && onPageCountChange) {
       onPageCountChange(pageCount);
     }
   }, [onPageCountChange, pageCount]);
 
+  // Handle user scroll - detect which page is visible
   useEffect(() => {
-    const root = scrollContainerRef.current;
-    if (!root || pageCount === 0 || !onActivePageChange) {
+    const container = containerRef.current;
+    if (!container || pageCount === 0 || !linkedScrollingEnabled) {
       return;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visibleEntries = entries.filter((entry) => entry.isIntersecting);
-        if (visibleEntries.length === 0) {
-          return;
-        }
+    let rafId: number | null = null;
 
-        visibleEntries.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        const topEntry = visibleEntries[0];
-        const pageAttr = (topEntry.target as HTMLElement).dataset.pageNumber;
-        const pageNumber = Number(pageAttr);
-        if (Number.isInteger(pageNumber) && pageNumber > 0) {
-          if (Date.now() < suppressObserverUntilRef.current) {
-            return;
-          }
-          if (lastReportedPageRef.current === pageNumber) {
-            return;
-          }
-          lastReportedPageRef.current = pageNumber;
-          onActivePageChange(pageNumber, scrollSourceId);
-        }
-      },
-      {
-        root,
-        threshold: [0.5, 0.75]
+    const handleScroll = () => {
+      // Skip if we're in the middle of a programmatic scroll
+      if (isScrollingProgrammatically.current) {
+        return;
       }
-    );
 
-    for (let index = 1; index <= pageCount; index += 1) {
-      const element = pageRefs.current.get(index);
-      if (element) {
-        observer.observe(element);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
       }
-    }
 
-    return () => {
-      observer.disconnect();
+      rafId = requestAnimationFrame(() => {
+        const visiblePage = getVisiblePageNumber(container, pageRefs.current, pageCount);
+        if (visiblePage !== activePage) {
+          onPageChange(visiblePage);
+        }
+        rafId = null;
+      });
     };
-  }, [pageCount, onActivePageChange, scrollSourceId]);
 
-  useEffect(() => {
-    if (!linkedScrollingEnabled || !activePage || pageCount === 0) {
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [pageCount, linkedScrollingEnabled, activePage, onPageChange]);
+
+  // Scroll to page when activePage changes from another source
+  useLayoutEffect(() => {
+    if (!linkedScrollingEnabled || pageCount === 0) {
       return;
     }
+
+    // Don't scroll if we are the scroll source
+    if (isScrollSource) {
+      lastScrolledToPage.current = activePage;
+      return;
+    }
+
+    // Don't scroll to same page twice
+    if (lastScrolledToPage.current === activePage) {
+      return;
+    }
+
     const targetPage = Math.min(Math.max(activePage, 1), pageCount);
-    if (lastProgrammaticPageRef.current === targetPage) {
-      return;
-    }
-    // Ignore page updates that originated from this viewer itself.
-    if (lastReportedPageRef.current === targetPage) {
-      lastProgrammaticPageRef.current = targetPage;
-      return;
-    }
     const targetElement = pageRefs.current.get(targetPage);
-    if (!targetElement) {
+    const container = containerRef.current;
+
+    if (!targetElement || !container) {
       return;
     }
-    lastProgrammaticPageRef.current = targetPage;
-    suppressObserverUntilRef.current = Date.now() + 500;
-    targetElement.scrollIntoView({ block: "start", behavior: "auto" });
-  }, [activePage, linkedScrollingEnabled, pageCount]);
+
+    lastScrolledToPage.current = activePage;
+    isScrollingProgrammatically.current = true;
+
+    // Calculate scroll position relative to container
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = targetElement.getBoundingClientRect();
+    const scrollTop = container.scrollTop + (elementRect.top - containerRect.top);
+
+    container.scrollTo({
+      top: scrollTop,
+      behavior: "auto"
+    });
+
+    // Release programmatic scroll lock after scroll settles (longer delay)
+    setTimeout(() => {
+      isScrollingProgrammatically.current = false;
+    }, 300);
+  }, [activePage, linkedScrollingEnabled, pageCount, isScrollSource]);
 
   return (
     <section className="rounded-lg border border-border">
-      <div className="border-b border-border px-4 py-3 text-sm text-muted-foreground">
-        {pageCount > 0 ? `Pages: ${pageCount}` : "Loading PDF..."}
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm text-muted-foreground">
+        <span>{pageCount > 0 ? `Pages: ${pageCount}` : "Loading PDF..."}</span>
+        {linkedScrollingEnabled && pageCount > 0 && (
+          <span className="rounded bg-muted px-2 py-1 text-xs">
+            Page {activePage}
+          </span>
+        )}
       </div>
-      <div ref={scrollContainerRef} className="max-h-[75vh] overflow-y-auto p-4">
+      <div ref={containerRef} className="max-h-[75vh] overflow-y-auto p-4">
         <Document
           file={pdfUrl}
           loading={<p className="text-sm text-muted-foreground">Loading PDF document...</p>}

@@ -4,6 +4,7 @@ import asyncio
 import importlib.metadata
 import time
 from pathlib import Path
+from typing import Any
 
 from parsearena.parsers.base import ParseResult
 from parsearena.parsers.device import detect_best_device
@@ -46,14 +47,16 @@ class DoclingParser:
                 execution_device = "cpu"
             else:
                 raise
-        markdown = conversion_result.document.export_to_markdown()
-        elapsed_seconds = time.perf_counter() - started_at
-
+        
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
+        
+        # Extract page-aligned markdown
+        markdown = self._extract_page_aligned_markdown(conversion_result.document, page_count)
+        elapsed_seconds = time.perf_counter() - started_at
 
         return ParseResult(
-            markdown=str(markdown),
+            markdown=markdown,
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
             metadata={
@@ -62,6 +65,135 @@ class DoclingParser:
                 "library_version": self._get_library_version(),
             },
         )
+
+    def _extract_page_aligned_markdown(self, document: Any, page_count: int) -> str:
+        # Try to get page-level content from docling document
+        # Docling documents have pages with items that can be exported
+        
+        pages = getattr(document, "pages", None)
+        
+        if pages and hasattr(pages, "__iter__"):
+            page_texts: list[str] = []
+            
+            # pages might be a dict or list
+            if isinstance(pages, dict):
+                # Dict keyed by page number or page id
+                for page_num in range(1, page_count + 1):
+                    page = pages.get(page_num) or pages.get(str(page_num)) or pages.get(page_num - 1)
+                    if page:
+                        page_md = self._render_page(page, document)
+                        page_texts.append(page_md)
+                    else:
+                        page_texts.append("")
+            else:
+                # List of pages
+                page_list = list(pages)
+                for i in range(page_count):
+                    if i < len(page_list):
+                        page_md = self._render_page(page_list[i], document)
+                        page_texts.append(page_md)
+                    else:
+                        page_texts.append("")
+            
+            if page_texts:
+                return "\f".join(page_texts)
+        
+        # Try iterate_items with page info
+        items_method = getattr(document, "iterate_items", None)
+        if callable(items_method):
+            try:
+                return self._build_markdown_from_items(document, page_count)
+            except Exception:
+                pass
+        
+        # Fallback: use standard export (no page alignment)
+        return str(document.export_to_markdown())
+
+    def _render_page(self, page: Any, document: Any) -> str:
+        # Try to get items for this specific page
+        items = getattr(page, "items", None) or getattr(page, "children", None)
+        
+        if items and hasattr(items, "__iter__"):
+            parts: list[str] = []
+            for item in items:
+                item_md = self._render_item(item)
+                if item_md:
+                    parts.append(item_md)
+            return "\n\n".join(parts)
+        
+        # Try page-level export
+        if hasattr(page, "export_to_markdown"):
+            try:
+                return str(page.export_to_markdown()).strip()
+            except Exception:
+                pass
+        
+        return ""
+
+    def _build_markdown_from_items(self, document: Any, page_count: int) -> str:
+        from collections import defaultdict
+        
+        pages_content: dict[int, list[str]] = defaultdict(list)
+        
+        for item, _ in document.iterate_items():
+            # Get page number from item's prov (provenance)
+            prov = getattr(item, "prov", None)
+            page_no = 1
+            
+            if prov and hasattr(prov, "__iter__"):
+                for p in prov:
+                    page_ref = getattr(p, "page_no", None) or getattr(p, "page", None)
+                    if isinstance(page_ref, int):
+                        page_no = page_ref
+                        break
+            
+            item_md = self._render_item(item)
+            if item_md:
+                pages_content[page_no].append(item_md)
+        
+        # Build page-aligned output
+        page_texts: list[str] = []
+        for page_num in range(1, page_count + 1):
+            content = pages_content.get(page_num, [])
+            page_texts.append("\n\n".join(content))
+        
+        return "\f".join(page_texts)
+
+    def _render_item(self, item: Any) -> str:
+        item_type = type(item).__name__.lower()
+        
+        # Try export_to_markdown
+        if hasattr(item, "export_to_markdown"):
+            try:
+                return str(item.export_to_markdown()).strip()
+            except Exception:
+                pass
+        
+        # Get text content
+        text = getattr(item, "text", "") or getattr(item, "content", "") or ""
+        if not isinstance(text, str):
+            text = str(text) if text else ""
+        text = text.strip()
+        
+        if not text:
+            return ""
+        
+        # Format based on type
+        if "heading" in item_type or "title" in item_type:
+            level = getattr(item, "level", 1) or 1
+            return f"{'#' * min(level, 6)} {text}"
+        
+        if "table" in item_type:
+            # Try to get table HTML or markdown
+            html = getattr(item, "html", "") or getattr(item, "text_as_html", "")
+            if html:
+                return str(html)
+            return text
+        
+        if "list" in item_type:
+            return f"- {text}"
+        
+        return text
 
     def _build_converter(self, *, preferred_device: str, converter_cls: type) -> object:
         try:

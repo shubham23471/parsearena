@@ -15,7 +15,7 @@ class PyMuPDF4LLMParser:
         return "cpu"
 
     def get_config_summary(self) -> dict[str, object]:
-        return {}
+        return {"page_chunks": True}
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -30,14 +30,33 @@ class PyMuPDF4LLMParser:
             ) from exc
 
         started_at = time.perf_counter()
-        markdown = pymupdf4llm.to_markdown(str(pdf_path))
-        elapsed_seconds = time.perf_counter() - started_at
-
+        
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
 
+        # Use page_chunks=True to get per-page markdown
+        page_chunks = pymupdf4llm.to_markdown(str(pdf_path), page_chunks=True)
+        
+        # Build page-aligned markdown with form feed separators
+        if isinstance(page_chunks, list):
+            # page_chunks is a list of dicts with 'text' key per page
+            page_texts: list[str] = []
+            for i in range(page_count):
+                if i < len(page_chunks):
+                    chunk = page_chunks[i]
+                    text = chunk.get("text", "") if isinstance(chunk, dict) else str(chunk)
+                    page_texts.append(text.strip())
+                else:
+                    page_texts.append("")
+            markdown = "\f".join(page_texts)
+        else:
+            # Fallback: single string without page info
+            markdown = str(page_chunks)
+        
+        elapsed_seconds = time.perf_counter() - started_at
+
         return ParseResult(
-            markdown=str(markdown),
+            markdown=markdown,
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
             metadata={

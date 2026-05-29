@@ -84,12 +84,15 @@ class MarkerParser:
         converter = self._get_converter(execution_device)
         started_at = time.perf_counter()
         rendered = converter(str(pdf_path))
-        text, _, images = text_from_rendered(rendered)
-        elapsed_seconds = time.perf_counter() - started_at
-
+        
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
+        
+        # Try to extract page-aligned markdown from rendered output
+        markdown = self._extract_page_aligned_markdown(rendered, text_from_rendered, page_count)
+        elapsed_seconds = time.perf_counter() - started_at
 
+        text, _, images = text_from_rendered(rendered)
         metadata = {
             "image_count": len(images) if images is not None else 0,
             "execution_device": execution_device,
@@ -97,11 +100,119 @@ class MarkerParser:
             "library_version": self._get_library_version(),
         }
         return ParseResult(
-            markdown=str(text),
+            markdown=markdown,
             elapsed_seconds=elapsed_seconds,
             page_count=page_count,
             metadata=metadata,
         )
+
+    def _extract_page_aligned_markdown(
+        self, 
+        rendered: Any, 
+        text_from_rendered: Any,
+        page_count: int
+    ) -> str:
+        # Try to get per-page content from rendered.children (pages)
+        children = getattr(rendered, "children", None)
+        
+        if children and hasattr(children, "__iter__"):
+            page_texts: list[str] = []
+            for i, child in enumerate(children):
+                if i >= page_count:
+                    break
+                # Each child is a page, try to get its markdown
+                child_md = self._render_page_block(child)
+                page_texts.append(child_md)
+            
+            # Pad with empty pages if needed
+            while len(page_texts) < page_count:
+                page_texts.append("")
+            
+            if page_texts:
+                return "\f".join(page_texts)
+        
+        # Fallback: use text_from_rendered (no page alignment)
+        text, _, _ = text_from_rendered(rendered)
+        return str(text)
+
+    def _render_page_block(self, block: Any) -> str:
+        # Try to render a single page block to markdown
+        # Marker blocks have render_children() or similar methods
+        
+        # Try block.render() first
+        if hasattr(block, "render"):
+            try:
+                result = block.render()
+                if isinstance(result, str):
+                    return result.strip()
+            except Exception:
+                pass
+        
+        # Try to get markdown attribute
+        if hasattr(block, "markdown"):
+            md = getattr(block, "markdown", "")
+            if isinstance(md, str):
+                return md.strip()
+        
+        # Try to recursively render children
+        children = getattr(block, "children", None)
+        if children and hasattr(children, "__iter__"):
+            parts: list[str] = []
+            for child in children:
+                child_text = self._render_block_to_text(child)
+                if child_text:
+                    parts.append(child_text)
+            return "\n\n".join(parts)
+        
+        # Try to get raw text
+        if hasattr(block, "raw_text"):
+            raw = getattr(block, "raw_text", "")
+            if callable(raw):
+                try:
+                    return str(raw()).strip()
+                except Exception:
+                    pass
+            elif isinstance(raw, str):
+                return raw.strip()
+        
+        return ""
+
+    def _render_block_to_text(self, block: Any) -> str:
+        # Get text content from a block
+        block_type = type(block).__name__
+        
+        # Try markdown attribute
+        if hasattr(block, "markdown"):
+            md = getattr(block, "markdown", "")
+            if isinstance(md, str) and md.strip():
+                return md.strip()
+        
+        # Try raw_text
+        if hasattr(block, "raw_text"):
+            raw = getattr(block, "raw_text", "")
+            if callable(raw):
+                try:
+                    text = str(raw())
+                except Exception:
+                    text = ""
+            else:
+                text = str(raw) if raw else ""
+            
+            if text.strip():
+                # Format based on block type
+                if "heading" in block_type.lower() or "title" in block_type.lower():
+                    return f"## {text.strip()}"
+                if "list" in block_type.lower():
+                    return f"- {text.strip()}"
+                return text.strip()
+        
+        # Recurse into children
+        children = getattr(block, "children", None)
+        if children and hasattr(children, "__iter__"):
+            parts = [self._render_block_to_text(c) for c in children]
+            return "\n\n".join(p for p in parts if p)
+        
+        return ""
 
     def _get_library_version(self) -> str | None:
         try:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import importlib.metadata
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -36,11 +36,13 @@ class UnstructuredParser:
         started_at = time.perf_counter()
         execution_device = self.get_execution_device()
         elements: list[Any] = partition_pdf(filename=str(pdf_path), strategy=self.STRATEGY)
-        markdown = self._elements_to_markdown(elements)
-        elapsed_seconds = time.perf_counter() - started_at
-
+        
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
+        
+        # Group elements by page number
+        markdown = self._elements_to_page_aligned_markdown(elements, page_count)
+        elapsed_seconds = time.perf_counter() - started_at
 
         metadata = {
             "element_count": len(elements),
@@ -57,13 +59,32 @@ class UnstructuredParser:
             metadata=metadata,
         )
 
-    def _elements_to_markdown(self, elements: list[Any]) -> str:
-        blocks: list[str] = []
+    def _elements_to_page_aligned_markdown(self, elements: list[Any], page_count: int) -> str:
+        # Group elements by page number
+        pages: dict[int, list[str]] = defaultdict(list)
+        
         for element in elements:
             rendered = self._render_element(element)
-            if rendered:
-                blocks.append(rendered)
-        return "\n\n".join(blocks)
+            if not rendered:
+                continue
+            
+            # Get page number from element metadata (1-indexed)
+            metadata = getattr(element, "metadata", None)
+            page_number = getattr(metadata, "page_number", None) if metadata else None
+            
+            if isinstance(page_number, int) and page_number >= 1:
+                pages[page_number].append(rendered)
+            else:
+                # If no page number, put in page 1
+                pages[1].append(rendered)
+        
+        # Build page-aligned markdown with form feed separators
+        page_texts: list[str] = []
+        for page_num in range(1, page_count + 1):
+            page_content = pages.get(page_num, [])
+            page_texts.append("\n\n".join(page_content))
+        
+        return "\f".join(page_texts)
 
     def _render_element(self, element: Any) -> str:
         element_type = type(element).__name__
@@ -78,8 +99,6 @@ class UnstructuredParser:
 
         if element_type == "Table":
             table_html = self._clean_text(getattr(metadata, "text_as_html", "") if metadata else "")
-            # Keep markdown/plain-text table content first because the UI renderer
-            # consumes Markdown; HTML tables can degrade readability when not rendered.
             if text:
                 return text
             return table_html

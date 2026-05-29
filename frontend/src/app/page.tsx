@@ -42,10 +42,14 @@ export default function HomePage() {
   const [diffParserB, setDiffParserB] = useState<string | null>(null);
   const [jobInfoExpanded, setJobInfoExpanded] = useState(true);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const { activePdfPage, handleSyncedPageChange, setActivePdfPage } = useSyncedPdfPage({
+  const { activePdfPage, setActivePdfPage, scrollSourceId, handlePageChange } = useSyncedPdfPage({
     linkedScrollingEnabled,
     pdfPageCount
   });
+
+  const handlePdfPageChange = (page: number) => handlePageChange(page, "pdf");
+  const handlePrimaryParserPageChange = (page: number) => handlePageChange(page, "parser-primary");
+  const handleSecondaryParserPageChange = (page: number) => handlePageChange(page, "parser-secondary");
 
   function handleUploaded(response: UploadResponse): void {
     setJobId(response.job_id);
@@ -432,8 +436,8 @@ export default function HomePage() {
                       jobId={jobId}
                       activePage={activePdfPage}
                       linkedScrollingEnabled={linkedScrollingEnabled}
-                      scrollSourceId="pdf"
-                      onActivePageChange={handleSyncedPageChange}
+                      isScrollSource={scrollSourceId === "pdf"}
+                      onPageChange={handlePdfPageChange}
                       onPageCountChange={setPdfPageCount}
                     />
                   )}
@@ -449,8 +453,8 @@ export default function HomePage() {
                     activePage={activePdfPage}
                     totalPages={pdfPageCount}
                     linkedScrollingEnabled={linkedScrollingEnabled}
-                    onActivePageChange={handleSyncedPageChange}
-                    scrollSourceId="parser-primary"
+                    isScrollSource={scrollSourceId === "parser-primary"}
+                    onPageChange={handlePrimaryParserPageChange}
                     viewMode={viewMode}
                     otherVisibleParsers={secondaryParserTab ? [secondaryParserTab] : []}
                     emptyMessage={
@@ -477,8 +481,8 @@ export default function HomePage() {
                       activePage={activePdfPage}
                       totalPages={pdfPageCount}
                       linkedScrollingEnabled={linkedScrollingEnabled}
-                      onActivePageChange={handleSyncedPageChange}
-                      scrollSourceId="parser-secondary"
+                      isScrollSource={scrollSourceId === "parser-secondary"}
+                      onPageChange={handleSecondaryParserPageChange}
                       viewMode={viewMode}
                       otherVisibleParsers={activeParserTab ? [activeParserTab] : []}
                       emptyMessage={
