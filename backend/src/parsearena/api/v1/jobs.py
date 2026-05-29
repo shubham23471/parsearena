@@ -15,6 +15,7 @@ from parsearena.schemas.jobs import (
     ParseResultResponse,
     ParseTriggerResponse,
 )
+from parsearena.schemas.metrics import MetricsResponse
 from parsearena.services.parser_service import ParserService
 from parsearena.services.storage import StorageService
 
@@ -142,6 +143,19 @@ async def get_parse_result(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return ParseResultResponse.model_validate(result)
+
+
+@router.get("/jobs/{job_id}/results/{parser_name}/metrics", response_model=MetricsResponse)
+async def get_parser_metrics(
+    job_id: str,
+    parser_name: str,
+    storage: StorageService = Depends(get_storage),
+) -> MetricsResponse:
+    try:
+        result = await storage.get_metrics(job_id, parser_name)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return MetricsResponse.model_validate(result)
 
 
 @router.get("/jobs/{job_id}/results", response_model=AllResultsResponse)

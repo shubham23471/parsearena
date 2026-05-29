@@ -36,6 +36,13 @@ function formatExecutionDevice(device: ParserStatus["execution_device"]): string
   return "Detecting...";
 }
 
+function formatParserLabel(name: string, status: ParserStatus): string {
+  if (status.library_version) {
+    return `${name} v${status.library_version}`;
+  }
+  return name;
+}
+
 export function ParseProgress({ jobId, onStatusUpdate, onFinished }: ParseProgressProps) {
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +142,7 @@ export function ParseProgress({ jobId, onStatusUpdate, onFinished }: ParseProgre
             className="flex items-center justify-between rounded border border-border px-3 py-2 text-sm"
           >
             <div className="space-y-1">
-              <p className="font-medium">{parserName}</p>
+              <p className="font-medium">{formatParserLabel(parserName, parser)}</p>
               <p className="text-xs text-muted-foreground">
                 Device: {formatExecutionDevice(parser.execution_device)}
               </p>

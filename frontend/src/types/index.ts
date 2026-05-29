@@ -15,6 +15,7 @@ export type ParserStatus = {
   elapsed_seconds: number | null;
   error: string | null;
   execution_device: "cuda" | "mps" | "cpu" | null;
+  library_version: string | null;
   queued_at: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -76,6 +77,51 @@ export type DiffResult = {
 export type ParseResult = {
   markdown: string;
   elapsed_seconds: number | null;
+  metadata: ParserMetadata | null;
+};
+
+export type ParserMetadata = {
+  library_version: string | null;
+  execution_device: string | null;
+  is_warm_start: boolean | null;
+  model_load_seconds: number | null;
+  parse_only_seconds: number | null;
+  gpu_fallback: boolean | null;
+  config_summary: Record<string, unknown> | null;
+  element_types?: Record<string, number>;
+  strategy?: string;
+  plugins_enabled?: boolean;
+};
+
+export type StructuralMetrics = {
+  word_count: number;
+  character_count: number;
+  heading_count: number;
+  heading_h1_count: number;
+  heading_h2_count: number;
+  heading_h3_plus_count: number;
+  table_count: number;
+  list_item_count: number;
+  code_block_count: number;
+  image_reference_count: number;
+  empty_line_ratio: number;
+  noise_line_count: number;
+  unicode_error_count: number;
+  words_per_page: number;
+};
+
+export type ChunkSimulationResult = {
+  chunk_count: number;
+  avg_chunk_size_chars: number;
+  min_chunk_size_chars: number;
+  max_chunk_size_chars: number;
+  chunk_size_std_dev: number;
+  preview_chunks: string[];
+};
+
+export type ParserMetricsResponse = {
+  structural_metrics: StructuralMetrics;
+  chunk_simulation: ChunkSimulationResult;
 };
 
 export type ParseRequest = {
@@ -101,4 +147,5 @@ export type ParserInfo = {
   api_key_env_var: string | null;
   install_command: string;
   is_available: boolean;
+  library_version: string | null;
 };

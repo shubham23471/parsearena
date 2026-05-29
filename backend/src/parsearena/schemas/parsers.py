@@ -12,3 +12,4 @@ class ParserInfoResponse(BaseModel):
     api_key_env_var: str | None = None
     install_command: str
     is_available: bool
+    library_version: str | None = None

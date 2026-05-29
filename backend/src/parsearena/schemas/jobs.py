@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -20,6 +21,7 @@ class ParserStatus(BaseModel):
     elapsed_seconds: float | None = None
     error: str | None = None
     execution_device: Literal["cuda", "mps", "cpu"] | None = None
+    library_version: str | None = None
     queued_at: datetime | None = None
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -53,6 +55,7 @@ class ParseRequest(BaseModel):
 class ParseResultResponse(BaseModel):
     markdown: str
     elapsed_seconds: float | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class AllResultsResponse(BaseModel):

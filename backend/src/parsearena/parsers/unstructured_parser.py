@@ -99,9 +99,7 @@ class UnstructuredParser:
 
         if element_type == "Table":
             table_html = self._clean_text(getattr(metadata, "text_as_html", "") if metadata else "")
-            if text:
-                return text
-            return table_html
+            return table_html or text
 
         if element_type == "ListItem":
             if not text:
@@ -126,8 +124,8 @@ class UnstructuredParser:
             return ""
         return value.strip()
 
-    def _get_library_version(self) -> str | None:
+    def _get_library_version(self) -> str:
         try:
             return importlib.metadata.version("unstructured")
         except importlib.metadata.PackageNotFoundError:
-            return None
+            return "unknown"

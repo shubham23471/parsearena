@@ -18,6 +18,7 @@ class MarkerParser:
     def __init__(self) -> None:
         self._converters_by_device: dict[str, Any] = {}
         self._converter_lock = threading.Lock()
+        self._last_model_load_seconds = 0.0
 
     def get_execution_device(self) -> str:
         return detect_best_device()
@@ -31,15 +32,17 @@ class MarkerParser:
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
 
-    def _get_converter(self, execution_device: str) -> Any:
+    def _get_converter(self, execution_device: str) -> tuple[Any, float, bool]:
         converter = self._converters_by_device.get(execution_device)
         if converter is not None:
-            return converter
+            self._last_model_load_seconds = 0.0
+            return converter, 0.0, True
 
         with self._converter_lock:
             converter = self._converters_by_device.get(execution_device)
             if converter is not None:
-                return converter
+                self._last_model_load_seconds = 0.0
+                return converter, 0.0, True
 
             try:
                 from marker.converters.pdf import PdfConverter
@@ -49,6 +52,7 @@ class MarkerParser:
                     "Missing dependency 'marker-pdf'. Install with: uv add marker-pdf"
                 ) from exc
 
+            load_started_at = time.perf_counter()
             model_kwargs: dict[str, Any] = {}
             try:
                 model_signature = inspect.signature(create_model_dict)
@@ -69,7 +73,9 @@ class MarkerParser:
 
             converter = PdfConverter(artifact_dict=artifact_dict, **converter_kwargs)
             self._converters_by_device[execution_device] = converter
-            return converter
+            model_load_seconds = time.perf_counter() - load_started_at
+            self._last_model_load_seconds = model_load_seconds
+            return converter, model_load_seconds, False
 
     def _parse_sync(self, pdf_path: Path) -> ParseResult:
         try:
@@ -81,9 +87,11 @@ class MarkerParser:
             ) from exc
 
         execution_device = self.get_execution_device()
-        converter = self._get_converter(execution_device)
         started_at = time.perf_counter()
+        converter, model_load_seconds, is_warm_start = self._get_converter(execution_device)
+        parse_started_at = time.perf_counter()
         rendered = converter(str(pdf_path))
+        parse_only_seconds = time.perf_counter() - parse_started_at
         
         with pymupdf.open(pdf_path) as document:
             page_count = document.page_count
@@ -96,6 +104,9 @@ class MarkerParser:
         metadata = {
             "image_count": len(images) if images is not None else 0,
             "execution_device": execution_device,
+            "is_warm_start": is_warm_start,
+            "model_load_seconds": model_load_seconds,
+            "parse_only_seconds": parse_only_seconds,
             "config_summary": self.get_config_summary(),
             "library_version": self._get_library_version(),
         }
@@ -214,8 +225,8 @@ class MarkerParser:
         
         return ""
 
-    def _get_library_version(self) -> str | None:
+    def _get_library_version(self) -> str:
         try:
             return importlib.metadata.version("marker-pdf")
         except importlib.metadata.PackageNotFoundError:
-            return None
+            return "unknown"

@@ -155,7 +155,10 @@ export function ParserSelector({
               />
               <div className="space-y-1 w-full overflow-hidden">
                 <div className="flex justify-between items-center gap-2">
-                  <span className="font-semibold text-sm truncate">{parser.display_name}</span>
+                  <span className="font-semibold text-sm truncate">
+                    {parser.display_name}
+                    {parser.library_version ? ` v${parser.library_version}` : ""}
+                  </span>
                   <span
                     className={[
                       "shrink-0 inline-flex rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase",
@@ -166,7 +169,13 @@ export function ParserSelector({
                         : "bg-muted text-muted-foreground"
                     ].join(" ")}
                   >
-                    {isLocked ? "Completed" : parser.is_available ? "Ready" : "Missing"}
+                    {isLocked
+                      ? "Completed"
+                      : parser.is_available
+                        ? parser.library_version
+                          ? `v${parser.library_version} • Ready`
+                          : "Ready"
+                        : "Missing"}
                   </span>
                 </div>
                 {isLocked ? (

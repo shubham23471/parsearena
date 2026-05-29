@@ -32,18 +32,31 @@ class DoclingParser:
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("Missing dependency 'docling'. Install with: uv add docling") from exc
 
-        started_at = time.perf_counter()
         execution_device = self.get_execution_device()
-        converter = self._build_converter(preferred_device=execution_device, converter_cls=DocumentConverter)
+        gpu_fallback = False
+        started_at = time.perf_counter()
+        build_started_at = time.perf_counter()
+        converter = self._build_converter(
+            preferred_device=execution_device,
+            converter_cls=DocumentConverter,
+        )
+        model_load_seconds = time.perf_counter() - build_started_at
+        convert_started_at = time.perf_counter()
         try:
             conversion_result = converter.convert(str(pdf_path))
+            parse_only_seconds = time.perf_counter() - convert_started_at
         except Exception as exc:
             if execution_device != "cpu" and self._is_meta_tensor_error(exc):
+                gpu_fallback = True
+                started_at = time.perf_counter()
                 cpu_converter = self._build_converter(
                     preferred_device="cpu",
                     converter_cls=DocumentConverter,
                 )
+                model_load_seconds = time.perf_counter() - started_at
+                convert_started_at = time.perf_counter()
                 conversion_result = cpu_converter.convert(str(pdf_path))
+                parse_only_seconds = time.perf_counter() - convert_started_at
                 execution_device = "cpu"
             else:
                 raise
@@ -61,6 +74,9 @@ class DoclingParser:
             page_count=page_count,
             metadata={
                 "execution_device": execution_device,
+                "gpu_fallback": gpu_fallback,
+                "model_load_seconds": model_load_seconds,
+                "parse_only_seconds": parse_only_seconds,
                 "config_summary": self.get_config_summary(),
                 "library_version": self._get_library_version(),
             },
@@ -233,8 +249,8 @@ class DoclingParser:
         message = str(exc)
         return "Cannot copy out of meta tensor" in message or "to_empty()" in message
 
-    def _get_library_version(self) -> str | None:
+    def _get_library_version(self) -> str:
         try:
             return importlib.metadata.version("docling")
         except importlib.metadata.PackageNotFoundError:
-            return None
+            return "unknown"

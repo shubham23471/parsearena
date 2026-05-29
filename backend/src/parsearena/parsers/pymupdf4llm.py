@@ -15,7 +15,7 @@ class PyMuPDF4LLMParser:
         return "cpu"
 
     def get_config_summary(self) -> dict[str, object]:
-        return {"page_chunks": True}
+        return {}
 
     async def parse(self, pdf_path: Path) -> ParseResult:
         return await asyncio.to_thread(self._parse_sync, pdf_path)
@@ -66,8 +66,8 @@ class PyMuPDF4LLMParser:
             },
         )
 
-    def _get_library_version(self) -> str | None:
+    def _get_library_version(self) -> str:
         try:
             return importlib.metadata.version("pymupdf4llm")
         except importlib.metadata.PackageNotFoundError:
-            return None
+            return "unknown"

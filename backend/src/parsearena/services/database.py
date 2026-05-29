@@ -55,6 +55,15 @@ MIGRATIONS: list[Migration] = [
             """,
         ),
     ),
+    (
+        3,
+        (
+            """
+            ALTER TABLE parser_results
+            ADD COLUMN library_version TEXT;
+            """,
+        ),
+    ),
 ]
 
 

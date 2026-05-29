@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -91,11 +92,18 @@ class StorageService:
         parser_name: str,
         markdown: str,
         timing: float,
+        metadata: dict[str, object] | None = None,
         execution_device: str | None = None,
+        library_version: str | None = None,
     ) -> None:
         job_dir = self._job_dir(job_id)
         markdown_path = job_dir / f"{parser_name}.md"
         markdown_path.write_text(markdown, encoding="utf-8")
+        metadata_path = job_dir / f"{parser_name}_meta.json"
+        metadata_path.write_text(
+            json.dumps(metadata or {}, indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
         await self.update_parser_status(
             job_id=job_id,
             parser_name=parser_name,
@@ -103,6 +111,7 @@ class StorageService:
             elapsed_seconds=timing,
             error=None,
             execution_device=execution_device,
+            library_version=library_version,
         )
 
     async def update_parser_status(
@@ -114,6 +123,7 @@ class StorageService:
         elapsed_seconds: float | None = None,
         error: str | None = None,
         execution_device: str | None = None,
+        library_version: str | None = None,
     ) -> dict:
         now = datetime.now(UTC).isoformat()
         queued_at = now if status == "queued" else None
@@ -128,15 +138,17 @@ class StorageService:
                 elapsed_seconds,
                 error,
                 execution_device,
+                library_version,
                 queued_at,
                 started_at,
                 completed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, parser_name) DO UPDATE SET
                 status = excluded.status,
                 elapsed_seconds = excluded.elapsed_seconds,
                 error = excluded.error,
                 execution_device = COALESCE(excluded.execution_device, parser_results.execution_device),
+                library_version = COALESCE(excluded.library_version, parser_results.library_version),
                 queued_at = COALESCE(parser_results.queued_at, excluded.queued_at),
                 started_at = COALESCE(parser_results.started_at, excluded.started_at),
                 completed_at = excluded.completed_at
@@ -148,6 +160,7 @@ class StorageService:
                 elapsed_seconds,
                 error,
                 execution_device,
+                library_version,
                 queued_at,
                 started_at,
                 completed_at,
@@ -191,10 +204,56 @@ class StorageService:
         if not markdown_path.exists():
             raise FileNotFoundError(f"Result file not found for parser '{parser_name}'.")
 
+        metadata_path = self._job_dir(job_id) / f"{parser_name}_meta.json"
+        metadata: dict[str, object] | None = None
+        if metadata_path.exists():
+            try:
+                metadata_payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+                metadata = metadata_payload if isinstance(metadata_payload, dict) else None
+            except json.JSONDecodeError:
+                metadata = None
+
         return {
             "markdown": markdown_path.read_text(encoding="utf-8"),
             "elapsed_seconds": parser_row["elapsed_seconds"],
+            "metadata": metadata,
         }
+
+    async def save_metrics(self, job_id: str, parser_name: str, metrics: dict[str, object]) -> None:
+        job_dir = self._job_dir(job_id)
+        metrics_path = job_dir / f"{parser_name}_metrics.json"
+        metrics_path.write_text(
+            json.dumps(metrics, indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+
+    async def get_metrics(self, job_id: str, parser_name: str) -> dict[str, object]:
+        parser_row = await self.database.fetchone(
+            """
+            SELECT status
+            FROM parser_results
+            WHERE job_id = ? AND parser_name = ?
+            """,
+            (job_id, parser_name),
+        )
+        if parser_row is None:
+            raise FileNotFoundError(f"Result metadata not found for parser '{parser_name}'.")
+        if parser_row["status"] != "completed":
+            raise FileNotFoundError(f"Result is not ready for parser '{parser_name}'.")
+
+        metrics_path = self._job_dir(job_id) / f"{parser_name}_metrics.json"
+        if not metrics_path.exists():
+            raise FileNotFoundError(f"Metrics file not found for parser '{parser_name}'.")
+
+        try:
+            payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise FileNotFoundError(
+                f"Metrics payload is not readable for parser '{parser_name}'."
+            ) from exc
+        if not isinstance(payload, dict):
+            raise FileNotFoundError(f"Metrics payload is invalid for parser '{parser_name}'.")
+        return payload
 
     async def get_markdown_path(self, job_id: str, parser_name: str) -> Path:
         parser_row = await self.database.fetchone(
@@ -262,6 +321,7 @@ class StorageService:
                 elapsed_seconds,
                 error,
                 execution_device,
+                library_version,
                 queued_at,
                 started_at,
                 completed_at
@@ -278,6 +338,7 @@ class StorageService:
                 "elapsed_seconds": row["elapsed_seconds"],
                 "error": row["error"],
                 "execution_device": row["execution_device"],
+                "library_version": row["library_version"],
                 "queued_at": row["queued_at"],
                 "started_at": row["started_at"],
                 "completed_at": row["completed_at"],

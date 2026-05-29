@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict
 
+from parsearena.metrics import compute_structural_metrics, simulate_chunks
 from parsearena.parsers import (
     DoclingParser,
     MarkItDownParser,
@@ -111,12 +113,28 @@ class ParserService:
         metadata["config_summary"] = self._get_config_summary(parser, metadata)
         parse_result.metadata = metadata
         execution_device = self._extract_execution_device(parse_result)
+        library_version = self._extract_library_version(parse_result)
         await self.storage.save_result(
             job_id=job_id,
             parser_name=parser_name,
             markdown=parse_result.markdown,
             timing=parse_result.elapsed_seconds,
+            metadata=metadata,
             execution_device=execution_device,
+            library_version=library_version,
+        )
+        structural_metrics = compute_structural_metrics(
+            parse_result.markdown,
+            parse_result.page_count,
+        )
+        chunk_simulation = simulate_chunks(parse_result.markdown)
+        await self.storage.save_metrics(
+            job_id=job_id,
+            parser_name=parser_name,
+            metrics={
+                "structural_metrics": asdict(structural_metrics),
+                "chunk_simulation": asdict(chunk_simulation),
+            },
         )
 
     def _get_parser(self, parser_name: str) -> BaseParser:
@@ -139,6 +157,15 @@ class ParserService:
             return None
         value = metadata.get("execution_device")
         if value in {"cuda", "mps", "cpu"}:
+            return value
+        return None
+
+    def _extract_library_version(self, parse_result: ParseResult) -> str | None:
+        metadata = parse_result.metadata
+        if metadata is None:
+            return None
+        value = metadata.get("library_version")
+        if isinstance(value, str):
             return value
         return None
 

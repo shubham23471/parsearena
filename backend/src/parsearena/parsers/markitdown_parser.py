@@ -122,8 +122,8 @@ class MarkItDownParser:
             return conversion_result
         raise ValueError("MarkItDown returned an unexpected conversion result payload.")
 
-    def _get_library_version(self) -> str | None:
+    def _get_library_version(self) -> str:
         try:
             return importlib.metadata.version("markitdown")
         except importlib.metadata.PackageNotFoundError:
-            return None
+            return "unknown"

@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { getAllMarkdownDownloadsUrl } from "@/api";
+import { getAllMarkdownDownloadsUrl, getAllResults, getParserMetrics, triggerParse } from "@/api";
 import { ParseProgress } from "@/components/parse-progress";
 import { DiffSummaryCard } from "@/components/diff-summary";
 import { DiffViewer } from "@/components/diff-viewer";
 import { HomeHeader } from "@/components/home/home-header";
 import { JobSummaryCard } from "@/components/home/job-summary-card";
 import { WorkspaceToolbar } from "@/components/home/workspace-toolbar";
+import { MetricsComparison } from "@/components/metrics-comparison";
 import { ParserPanel } from "@/components/parser-panel";
 import { ParserSelector } from "@/components/parser-selector";
 import { PdfUpload } from "@/components/pdf-upload";
@@ -17,8 +18,13 @@ import { useHomeKeyboardShortcuts } from "@/hooks/use-home-keyboard-shortcuts";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useSyncedPdfPage } from "@/hooks/use-synced-pdf-page";
 import { computeStructuralDiff } from "@/lib/diff";
-import { getAllResults, triggerParse } from "@/api";
-import type { JobStatus, ParseResult, UploadResponse, ViewMode } from "@/types";
+import type {
+  JobStatus,
+  ParseResult,
+  ParserMetricsResponse,
+  UploadResponse,
+  ViewMode
+} from "@/types";
 
 type UploadState = "idle" | "uploading" | "uploaded" | "error";
 type ParseState = "idle" | "parsing" | "completed" | "error";
@@ -32,6 +38,7 @@ export default function HomePage() {
   const [parseError, setParseError] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [allResults, setAllResults] = useState<Record<string, ParseResult | null>>({});
+  const [parserMetricsByName, setParserMetricsByName] = useState<Record<string, ParserMetricsResponse | null>>({});
   const [activeParserTab, setActiveParserTab] = useState<string | null>(null);
   const [pdfPageCount, setPdfPageCount] = useState(1);
   const [linkedScrollingEnabled, setLinkedScrollingEnabled] = useState(true);
@@ -58,6 +65,7 @@ export default function HomePage() {
     setParseError(null);
     setJobStatus(null);
     setAllResults({});
+    setParserMetricsByName({});
     setActiveParserTab(null);
     setSecondaryParserTab(null);
     setDiffParserA(null);
@@ -225,6 +233,43 @@ export default function HomePage() {
   const showPdfPanel = viewMode === "tab" || viewMode === "split";
 
   useEffect(() => {
+    if (!jobId) {
+      return;
+    }
+    const parserNamesToLoad = completedParserTabs.filter((parserName) => parserMetricsByName[parserName] === undefined);
+    if (parserNamesToLoad.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    void Promise.all(
+      parserNamesToLoad.map(async (parserName) => {
+        try {
+          const metrics = await getParserMetrics(jobId, parserName);
+          return [parserName, metrics] as const;
+        } catch {
+          return [parserName, null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) {
+        return;
+      }
+      setParserMetricsByName((previous) => {
+        const next = { ...previous };
+        for (const [parserName, metrics] of entries) {
+          next[parserName] = metrics;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [completedParserTabs, jobId, parserMetricsByName]);
+
+  useEffect(() => {
     if (activeParserChoices.length === 0) {
       setActiveParserTab(null);
       return;
@@ -287,6 +332,9 @@ export default function HomePage() {
     }
     return "grid-cols-1 lg:grid-cols-[minmax(0,45fr)_minmax(0,55fr)]";
   }, [viewMode]);
+
+  const activeParserMetrics = activeParserTab ? parserMetricsByName[activeParserTab] ?? null : null;
+  const secondaryParserMetrics = secondaryParserTab ? parserMetricsByName[secondaryParserTab] ?? null : null;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -456,6 +504,7 @@ export default function HomePage() {
                     isScrollSource={scrollSourceId === "parser-primary"}
                     onPageChange={handlePrimaryParserPageChange}
                     viewMode={viewMode}
+                    metrics={activeParserMetrics}
                     otherVisibleParsers={secondaryParserTab ? [secondaryParserTab] : []}
                     emptyMessage={
                       parseState === "idle"
@@ -484,6 +533,7 @@ export default function HomePage() {
                       isScrollSource={scrollSourceId === "parser-secondary"}
                       onPageChange={handleSecondaryParserPageChange}
                       viewMode={viewMode}
+                      metrics={secondaryParserMetrics}
                       otherVisibleParsers={activeParserTab ? [activeParserTab] : []}
                       emptyMessage={
                         completedParserTabs.length < 2
@@ -494,6 +544,19 @@ export default function HomePage() {
                   )}
                 </div>
               )}
+
+              {(viewMode === "split" || viewMode === "compare") &&
+                activeParserTab &&
+                secondaryParserTab &&
+                activeParserMetrics &&
+                secondaryParserMetrics && (
+                  <MetricsComparison
+                    parserAName={activeParserTab}
+                    parserBName={secondaryParserTab}
+                    metricsA={activeParserMetrics}
+                    metricsB={secondaryParserMetrics}
+                  />
+                )}
             </section>
           </section>
         )}

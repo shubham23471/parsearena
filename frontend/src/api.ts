@@ -4,6 +4,8 @@ import type {
   JobStatus,
   ParseRequest,
   ParseResult,
+  ParserMetricsResponse,
+  ParserMetadata,
   ParseTriggerResponse,
   ParserInfo,
   UploadResponse
@@ -117,6 +119,15 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 
 export async function getParseResult(jobId: string, parser: string): Promise<ParseResult> {
   return request<ParseResult>(`/api/v1/jobs/${jobId}/results/${parser}`);
+}
+
+export async function getParserMetadata(jobId: string, parser: string): Promise<ParserMetadata | null> {
+  const result = await getParseResult(jobId, parser);
+  return result.metadata;
+}
+
+export async function getParserMetrics(jobId: string, parser: string): Promise<ParserMetricsResponse> {
+  return request<ParserMetricsResponse>(`/api/v1/jobs/${jobId}/results/${parser}/metrics`);
 }
 
 export async function getAllResults(jobId: string): Promise<AllResultsResponse> {

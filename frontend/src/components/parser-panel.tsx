@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getParserMarkdownDownloadUrl } from "@/api";
 import { MarkdownViewer } from "@/components/markdown-viewer";
-import type { ParseResult, ParserStatus, ViewMode } from "@/types";
+import { MetricsPanel } from "@/components/metrics-panel";
+import type { ParseResult, ParserMetricsResponse, ParserStatus, ViewMode } from "@/types";
 
 type ParserPanelProps = {
   jobId: string;
@@ -20,6 +21,7 @@ type ParserPanelProps = {
   isScrollSource: boolean;
   onPageChange: (page: number) => void;
   viewMode: ViewMode;
+  metrics: ParserMetricsResponse | null;
   otherVisibleParsers?: string[];
   emptyMessage?: string;
   emptyIsError?: boolean;
@@ -38,6 +40,22 @@ function getDeviceLabel(device: "cuda" | "mps" | "cpu" | null | undefined): stri
   return "Detecting";
 }
 
+function formatSeconds(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "-";
+  }
+  return `${value.toFixed(1)}s`;
+}
+
+function toExecutionDevice(
+  value: string | null | undefined
+): "cuda" | "mps" | "cpu" | null {
+  if (value === "cuda" || value === "mps" || value === "cpu") {
+    return value;
+  }
+  return null;
+}
+
 export function ParserPanel({
   jobId,
   title,
@@ -52,12 +70,16 @@ export function ParserPanel({
   isScrollSource,
   onPageChange,
   viewMode,
+  metrics,
   otherVisibleParsers = [],
   emptyMessage,
   emptyIsError = false
 }: ParserPanelProps) {
   const [contentVisible, setContentVisible] = useState(true);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [metricsExpanded, setMetricsExpanded] = useState(false);
   const parserStatus = activeParser ? parserStatuses[activeParser] : undefined;
+  const parserMetadata = result?.metadata ?? null;
   const hasParserChoices = parserNames.length > 0;
   const showTabBar = viewMode === "tab";
   const showParserSelector = viewMode === "split" || viewMode === "compare";
@@ -75,6 +97,11 @@ export function ParserPanel({
     return () => {
       window.clearTimeout(timeoutId);
     };
+  }, [activeParser]);
+
+  useEffect(() => {
+    setDetailsExpanded(false);
+    setMetricsExpanded(false);
   }, [activeParser]);
 
   const dropdownOptions = completedParserOptions.length > 0 ? completedParserOptions : parserNames;
@@ -98,6 +125,28 @@ export function ParserPanel({
             <span className="rounded border border-border px-2 py-1 text-xs text-muted-foreground">
               {getDeviceLabel(parserStatus.execution_device)}
             </span>
+          )}
+          {activeParser && (
+            <button
+              type="button"
+              onClick={() => {
+                setDetailsExpanded((previous) => !previous);
+              }}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            >
+              ⓘ Details
+            </button>
+          )}
+          {activeParser && (
+            <button
+              type="button"
+              onClick={() => {
+                setMetricsExpanded((previous) => !previous);
+              }}
+              className="rounded border border-border bg-background px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            >
+              Metrics
+            </button>
           )}
         </div>
 
@@ -134,6 +183,58 @@ export function ParserPanel({
             </select>
           </div>
         )}
+      </div>
+
+      <div
+        className={[
+          "overflow-hidden border-b border-border bg-muted/10 transition-all duration-200",
+          detailsExpanded ? "max-h-96 opacity-100" : "max-h-0 opacity-0 border-b-0"
+        ].join(" ")}
+      >
+        <div className="space-y-3 px-4 py-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">Run Details</span>
+            <span className="rounded border border-border px-2 py-0.5">
+              Version:{" "}
+              {parserMetadata?.library_version ??
+                parserStatus?.library_version ??
+                "unknown"}
+            </span>
+            <span className="rounded border border-border px-2 py-0.5">
+              Device: {getDeviceLabel(toExecutionDevice(parserMetadata?.execution_device ?? parserStatus?.execution_device))}
+            </span>
+          </div>
+
+          <p>
+            {parserMetadata?.is_warm_start
+              ? `Model Load: cached | Parse: ${formatSeconds(parserMetadata.parse_only_seconds)} | Total: ${formatSeconds(result?.elapsed_seconds)}`
+              : `Model Load: ${formatSeconds(parserMetadata?.model_load_seconds)} | Parse: ${formatSeconds(parserMetadata?.parse_only_seconds)} | Total: ${formatSeconds(result?.elapsed_seconds)}`}
+          </p>
+
+          {parserMetadata?.gpu_fallback && (
+            <p className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-amber-300">
+              ⚠ GPU failed — fell back to CPU
+            </p>
+          )}
+
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">Config Summary</p>
+            <pre className="overflow-x-auto rounded border border-border bg-background px-2 py-2 text-[11px] text-muted-foreground">
+              {JSON.stringify(parserMetadata?.config_summary ?? {}, null, 2)}
+            </pre>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={[
+          "overflow-hidden border-b border-border bg-muted/5 transition-all duration-200",
+          metricsExpanded ? "max-h-[720px] opacity-100" : "max-h-0 opacity-0 border-b-0"
+        ].join(" ")}
+      >
+        <div className="px-4 pb-3">
+          <MetricsPanel parserName={activeParser ?? "parser"} metrics={metrics} />
+        </div>
       </div>
 
       {showTabBar && hasParserChoices && (
