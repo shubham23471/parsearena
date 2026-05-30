@@ -10,6 +10,8 @@ Choosing a parser for real-world RAG pipelines is hard. Your PDFs are contracts,
 
 ## 🌟 Key Features
 
+
+- **Local-First & Private:** All parsing happens on your machine. Documents never leave your system.
 - **Side-by-Side Visualizer:** View the original PDF next to parser Markdown with linked scrolling.
 - **Parallel Parser Runs:** Trigger multiple parsers together and inspect progress, timing, and execution device (CPU/GPU).
 - **Multiple View Modes:**
@@ -17,9 +19,11 @@ Choosing a parser for real-world RAG pipelines is hard. Your PDFs are contracts,
   - **Split Mode:** PDF + two parser outputs.
   - **Compare Mode:** Two parser outputs without PDF.
   - **Diff Mode:** Structural diff view for headings, paragraphs, lists, and tables.
+- **Format-Normalized Diff:** Toggle between raw diff and normalized diff that ignores formatting conventions (e.g., `**bold**` vs `<b>bold</b>`), surfacing actual content differences.
+- **Run Details Panel:** Expand any result to see library version, exact configuration, timing breakdown (model load vs. parse time), execution device, and GPU fallback warnings.
+- **Metrics Comparison:** In Compare mode, view side-by-side metrics including word count, heading distribution (H1/H2/H3+), table count, list items, code blocks, noise lines, unicode errors, and chunk statistics.
+- **Chunk Simulation Preview:** See how each parser's output would chunk for RAG—view chunk count, size distribution, and the first three chunks rendered inline.
 - **Dynamic Parser Detection:** Installed parsers are auto-detected and missing setup commands are shown in UI.
-- **Local-First Stack:** FastAPI + SQLite + Next.js + Tailwind. Your files stay local.
-
 ---
 
 ## ⚖️ Methodology & Fairness
